@@ -73,12 +73,29 @@ class StreamProcessor:
         self.latest_headline: Tuple[str | None, float | None] = (None, None)
 
     async def start(self):
-        # will be filled with startup logic
-        ...
+        await init_tables()
+        self.producer = AIOKafkaProducer(bootstrap_servers=settings.kafka_brokers)
+        await self.producer.start()
+        self.consumer = AIOKafkaConsumer(
+            settings.price_topic,
+            bootstrap_servers=settings.kafka_brokers,
+            group_id="processor",
+            enable_auto_commit=True,
+            auto_offset_reset="latest",
+        )
+        await self.consumer.start()
+
+        await asyncio.gather(
+            self.price_ingest_task(),
+            self.news_ingest_task(),
+            self.process_prices_task(),
+        )
 
     async def stop(self):
-        # will be filled with teardown logic
-        ...
+        if self.consumer:
+            await self.consumer.stop()
+        if self.producer:
+            await self.producer.stop()
 
     async def price_ingest_task(self):
         """Stream prices from Binance and publish raw ticks to Kafka."""

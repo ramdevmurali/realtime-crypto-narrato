@@ -1,0 +1,71 @@
+from __future__ import annotations
+import math
+from datetime import datetime, timezone
+from typing import Optional
+
+POSITIVE_WORDS = {"surge", "gain", "up", "bull", "approval", "positive", "green"}
+NEGATIVE_WORDS = {"drop", "loss", "down", "bear", "selloff", "crash", "negative"}
+
+
+def now_utc() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def simple_sentiment(text: str) -> float:
+    """Tiny keyword-based polarity in [-1,1]."""
+    tokens = {t.lower().strip('.,!?') for t in text.split()}
+    pos = len(tokens & POSITIVE_WORDS)
+    neg = len(tokens & NEGATIVE_WORDS)
+    if pos + neg == 0:
+        return 0.0
+    return (pos - neg) / (pos + neg)
+
+
+def llm_summarize(provider: str, api_key: Optional[str], symbol: str, window: str, ret: float, headline: Optional[str], sentiment: Optional[float]) -> str:
+    direction = "up" if ret >= 0 else "down"
+    magnitude = f"{abs(ret)*100:.2f}%"
+    headline_part = f"Headline: {headline}" if headline else "No fresh headlines."
+    sentiment_word = "neutral"
+    if sentiment is not None:
+        if sentiment > 0.2:
+            sentiment_word = "positive"
+        elif sentiment < -0.2:
+            sentiment_word = "negative"
+
+    base_summary = f"{symbol.upper()} moved {magnitude} {direction} over {window}. {headline_part} Sentiment {sentiment_word}."
+
+    if provider == "stub" or not api_key:
+        return base_summary
+
+    try:
+        if provider == "openai":
+            import openai  # type: ignore
+
+            openai.api_key = api_key
+            prompt = (
+                f"Summarize crypto move for dashboard alert: {symbol.upper()} {magnitude} {direction} over {window}. "
+                f"Latest headline: {headline or 'none'}. Sentiment {sentiment_word}. Keep it under 50 words."
+            )
+            resp = openai.ChatCompletion.create(
+                model="gpt-3.5-turbo",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=80,
+                temperature=0.3,
+            )
+            return resp.choices[0].message["content"].strip()
+        if provider == "google":
+            import google.generativeai as genai  # type: ignore
+
+            genai.configure(api_key=api_key)
+            prompt = (
+                f"Summarize crypto move for dashboard alert: {symbol.upper()} {magnitude} {direction} over {window}. "
+                f"Latest headline: {headline or 'none'}. Sentiment {sentiment_word}. Keep concise, <50 words."
+            )
+            resp = genai.GenerativeModel("gemini-pro").generate_content(prompt)
+            # google client returns .text on success
+            return resp.text.strip() if hasattr(resp, "text") and resp.text else base_summary
+    except Exception:
+        # fall back to stub summary if any API/import/network error
+        return base_summary
+
+    return base_summary

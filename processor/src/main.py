@@ -89,6 +89,23 @@ class StreamProcessor:
                 pass
             await asyncio.sleep(60)
 
+    async def process_prices_task(self):
+        """Consume prices from Kafka, compute metrics, check anomalies."""
+        assert self.consumer
+        async for msg in self.consumer:
+            data = json.loads(msg.value.decode())
+            symbol = data.get('symbol')
+            price = float(data.get('price'))
+            ts = dateparser.parse(data.get('time')) if data.get('time') else now_utc()
+
+            await insert_price(ts, symbol, price)
+            win = self.price_windows[symbol]
+            win.add(ts, price)
+            metrics = await self.compute_metrics(symbol, ts)
+            if metrics:
+                await insert_metric(ts, symbol, metrics)
+            await self.check_anomalies(symbol, ts, metrics or {})
+
 
 def main():
     processor = StreamProcessor()

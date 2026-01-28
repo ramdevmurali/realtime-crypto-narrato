@@ -179,6 +179,45 @@ class StreamProcessor:
             return None
         return metrics
 
+    async def check_anomalies(self, symbol: str, ts: datetime, metrics: Dict):
+        assert self.producer
+        headline, sentiment = self.latest_headline
+        thresholds = {
+            "1m": settings.alert_threshold_1m,
+            "5m": settings.alert_threshold_5m,
+            "15m": settings.alert_threshold_15m,
+        }
+        for label, threshold in thresholds.items():
+            ret = metrics.get(f"return_{label}")
+            if ret is None:
+                continue
+            if abs(ret) >= threshold:
+                key = (symbol, label)
+                last_ts = self.last_alert.get(key)
+                if last_ts and ts - last_ts < timedelta(seconds=60):
+                    continue
+                direction = "up" if ret >= 0 else "down"
+                api_key = None
+                if settings.llm_provider == "openai":
+                    api_key = settings.openai_api_key
+                elif settings.llm_provider == "google":
+                    api_key = settings.google_api_key
+                summary = llm_summarize(settings.llm_provider, api_key, symbol, label, ret, headline, sentiment)
+                alert_payload = {
+                    "time": ts.isoformat(),
+                    "symbol": symbol,
+                    "window": label,
+                    "direction": direction,
+                    "ret": ret,
+                    "threshold": threshold,
+                    "headline": headline,
+                    "sentiment": sentiment,
+                    "summary": summary,
+                }
+                await insert_anomaly(ts, symbol, label, direction, ret, threshold, headline, sentiment, summary)
+                await self.producer.send_and_wait(settings.alerts_topic, json.dumps(alert_payload).encode())
+                self.last_alert[key] = ts
+
 
 def main():
     processor = StreamProcessor()

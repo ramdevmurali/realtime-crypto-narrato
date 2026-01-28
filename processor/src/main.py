@@ -4,57 +4,14 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Tuple
 
-import feedparser
-import websockets
 from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
 from dateutil import parser as dateparser
 
 from .config import settings
-from .db import init_tables, insert_price, insert_metric, insert_headline, insert_anomaly
-from .utils import now_utc, simple_sentiment, llm_summarize
+from .db import init_tables, insert_price, insert_metric, insert_anomaly
+from .utils import now_utc, llm_summarize
 from .windows import PriceWindow
-        # drop anything older than 15m + small buffer
-        cutoff = ts - timedelta(minutes=16)
-        while self.buffer and self.buffer[0][0] < cutoff:
-            self.buffer.popleft()
-
-    def _oldest_for_window(self, ts: datetime, window: timedelta):
-        cutoff = ts - window
-        candidate = None
-        for t, p in self.buffer:
-            if t <= cutoff:
-                candidate = (t, p)
-            else:
-                break
-        return candidate
-
-    def get_return(self, ts: datetime, window: timedelta):
-        ref = self._oldest_for_window(ts, window)
-        if not ref:
-            return None
-        _, past_price = ref
-        latest_price = self.buffer[-1][1]
-        if past_price == 0:
-            return None
-        return (latest_price - past_price) / past_price
-
-    def get_vol(self, ts: datetime, window: timedelta):
-        cutoff = ts - window
-        window_prices = [p for t, p in self.buffer if t >= cutoff]
-        if len(window_prices) < 3:
-            return None
-        returns = []
-        for i in range(1, len(window_prices)):
-            prev = window_prices[i - 1]
-            cur = window_prices[i]
-            if prev == 0:
-                continue
-            returns.append((cur - prev) / prev)
-        if len(returns) < 2:
-            return None
-        mean = sum(returns) / len(returns)
-        var = sum((r - mean) ** 2 for r in returns) / len(returns)
-        return var ** 0.5
+from .ingest import price_ingest_task, news_ingest_task
 
 
 class StreamProcessor:
@@ -79,8 +36,8 @@ class StreamProcessor:
         await self.consumer.start()
 
         await asyncio.gather(
-            self.price_ingest_task(),
-            self.news_ingest_task(),
+            price_ingest_task(self),
+            news_ingest_task(self),
             self.process_prices_task(),
         )
 
@@ -89,57 +46,6 @@ class StreamProcessor:
             await self.consumer.stop()
         if self.producer:
             await self.producer.stop()
-
-    async def price_ingest_task(self):
-        """Stream prices from Binance and publish raw ticks to Kafka."""
-        assert self.producer
-        stream_names = "/".join(f"{sym}@miniTicker" for sym in settings.symbols)
-        url = f"{settings.binance_stream}?streams={stream_names}"
-        while True:
-            try:
-                async with websockets.connect(url) as ws:
-                    async for msg in ws:
-                        data = json.loads(msg)
-                        payload = data.get("data", {})
-                        symbol = payload.get("s", "").lower()
-                        price = float(payload.get("c", 0))
-                        ts = now_utc()
-                        body = {"symbol": symbol, "price": price, "time": ts.isoformat()}
-                        await self.producer.send_and_wait(settings.price_topic, json.dumps(body).encode())
-            except Exception:
-                await asyncio.sleep(2)
-
-    async def news_ingest_task(self):
-        """Poll RSS feed, sentiment tag, and publish headlines."""
-        assert self.producer
-        seen_ids: set[str] = set()
-        while True:
-            try:
-                feed = feedparser.parse(settings.news_rss)
-                for entry in feed.entries[:20]:
-                    uid = entry.get('id') or entry.get('link') or entry.get('title')
-                    if uid in seen_ids:
-                        continue
-                    seen_ids.add(uid)
-                    published = entry.get('published') or entry.get('updated')
-                    ts = dateparser.parse(published) if published else now_utc()
-                    title = entry.get('title', 'untitled')
-                    url = entry.get('link')
-                    source = entry.get('source', {}).get('title') if entry.get('source') else "rss"
-                    sentiment = simple_sentiment(title)
-                    payload = {
-                        "time": ts.isoformat(),
-                        "title": title,
-                        "url": url,
-                        "source": source,
-                        "sentiment": sentiment,
-                    }
-                    await insert_headline(ts, title, source, url, sentiment)
-                    self.latest_headline = (title, sentiment)
-                    await self.producer.send_and_wait(settings.news_topic, json.dumps(payload).encode())
-            except Exception:
-                pass
-            await asyncio.sleep(60)
 
     async def process_prices_task(self):
         """Consume prices from Kafka, compute metrics, check anomalies."""
@@ -184,7 +90,6 @@ class StreamProcessor:
                 ratios.append(abs(r) / thr[label])
         metrics["attention"] = max(ratios) if ratios else None
 
-        # If we have no returns at all, treat as insufficient data
         if all(metrics[f"return_{lbl}"] is None for lbl in ["1m", "5m", "15m"]):
             return None
         return metrics

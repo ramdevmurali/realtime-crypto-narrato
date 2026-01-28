@@ -12,6 +12,7 @@ from .db import init_tables, insert_price, insert_metric, insert_anomaly
 from .utils import now_utc, llm_summarize
 from .windows import PriceWindow
 from .ingest import price_ingest_task, news_ingest_task
+from .metrics import compute_metrics
 
 
 class StreamProcessor:
@@ -59,40 +60,10 @@ class StreamProcessor:
             await insert_price(ts, symbol, price)
             win = self.price_windows[symbol]
             win.add(ts, price)
-            metrics = await self.compute_metrics(symbol, ts)
+            metrics = compute_metrics(self.price_windows, symbol, ts)
             if metrics:
                 await insert_metric(ts, symbol, metrics)
             await self.check_anomalies(symbol, ts, metrics or {})
-
-    async def compute_metrics(self, symbol: str, ts: datetime):
-        win = self.price_windows[symbol]
-        windows = {
-            "1m": timedelta(minutes=1),
-            "5m": timedelta(minutes=5),
-            "15m": timedelta(minutes=15),
-        }
-        metrics = {}
-        for label, delta in windows.items():
-            ret = win.get_return(ts, delta)
-            metrics[f"return_{label}"] = ret
-            metrics[f"vol_{label}"] = win.get_vol(ts, delta)
-
-        # attention = max(|return| / threshold)
-        ratios = []
-        thr = {
-            "1m": settings.alert_threshold_1m,
-            "5m": settings.alert_threshold_5m,
-            "15m": settings.alert_threshold_15m,
-        }
-        for label in ["1m", "5m", "15m"]:
-            r = metrics.get(f"return_{label}")
-            if r is not None and thr[label] > 0:
-                ratios.append(abs(r) / thr[label])
-        metrics["attention"] = max(ratios) if ratios else None
-
-        if all(metrics[f"return_{lbl}"] is None for lbl in ["1m", "5m", "15m"]):
-            return None
-        return metrics
 
     async def check_anomalies(self, symbol: str, ts: datetime, metrics: Dict):
         assert self.producer

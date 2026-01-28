@@ -20,6 +20,48 @@ class PriceWindow:
 
     def add(self, ts: datetime, price: float):
         self.buffer.append((ts, price))
+        # drop anything older than 15m + small buffer
+        cutoff = ts - timedelta(minutes=16)
+        while self.buffer and self.buffer[0][0] < cutoff:
+            self.buffer.popleft()
+
+    def _oldest_for_window(self, ts: datetime, window: timedelta):
+        cutoff = ts - window
+        candidate = None
+        for t, p in self.buffer:
+            if t <= cutoff:
+                candidate = (t, p)
+            else:
+                break
+        return candidate
+
+    def get_return(self, ts: datetime, window: timedelta):
+        ref = self._oldest_for_window(ts, window)
+        if not ref:
+            return None
+        _, past_price = ref
+        latest_price = self.buffer[-1][1]
+        if past_price == 0:
+            return None
+        return (latest_price - past_price) / past_price
+
+    def get_vol(self, ts: datetime, window: timedelta):
+        cutoff = ts - window
+        window_prices = [p for t, p in self.buffer if t >= cutoff]
+        if len(window_prices) < 3:
+            return None
+        returns = []
+        for i in range(1, len(window_prices)):
+            prev = window_prices[i - 1]
+            cur = window_prices[i]
+            if prev == 0:
+                continue
+            returns.append((cur - prev) / prev)
+        if len(returns) < 2:
+            return None
+        mean = sum(returns) / len(returns)
+        var = sum((r - mean) ** 2 for r in returns) / len(returns)
+        return var ** 0.5
 
 
 class StreamProcessor:
@@ -105,6 +147,37 @@ class StreamProcessor:
             if metrics:
                 await insert_metric(ts, symbol, metrics)
             await self.check_anomalies(symbol, ts, metrics or {})
+
+    async def compute_metrics(self, symbol: str, ts: datetime):
+        win = self.price_windows[symbol]
+        windows = {
+            "1m": timedelta(minutes=1),
+            "5m": timedelta(minutes=5),
+            "15m": timedelta(minutes=15),
+        }
+        metrics = {}
+        for label, delta in windows.items():
+            ret = win.get_return(ts, delta)
+            metrics[f"return_{label}"] = ret
+            metrics[f"vol_{label}"] = win.get_vol(ts, delta)
+
+        # attention = max(|return| / threshold)
+        ratios = []
+        thr = {
+            "1m": settings.alert_threshold_1m,
+            "5m": settings.alert_threshold_5m,
+            "15m": settings.alert_threshold_15m,
+        }
+        for label in ["1m", "5m", "15m"]:
+            r = metrics.get(f"return_{label}")
+            if r is not None and thr[label] > 0:
+                ratios.append(abs(r) / thr[label])
+        metrics["attention"] = max(ratios) if ratios else None
+
+        # If we have no returns at all, treat as insufficient data
+        if all(metrics[f"return_{lbl}"] is None for lbl in ["1m", "5m", "15m"]):
+            return None
+        return metrics
 
 
 def main():

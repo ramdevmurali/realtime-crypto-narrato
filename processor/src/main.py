@@ -8,11 +8,12 @@ from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
 from dateutil import parser as dateparser
 
 from .config import settings
-from .db import init_tables, insert_price, insert_metric, insert_anomaly
-from .utils import now_utc, llm_summarize
+from .db import init_tables, insert_price, insert_metric
+from .utils import now_utc
 from .windows import PriceWindow
 from .ingest import price_ingest_task, news_ingest_task
 from .metrics import compute_metrics
+from .anomaly import check_anomalies
 
 
 class StreamProcessor:
@@ -63,46 +64,7 @@ class StreamProcessor:
             metrics = compute_metrics(self.price_windows, symbol, ts)
             if metrics:
                 await insert_metric(ts, symbol, metrics)
-            await self.check_anomalies(symbol, ts, metrics or {})
-
-    async def check_anomalies(self, symbol: str, ts: datetime, metrics: Dict):
-        assert self.producer
-        headline, sentiment = self.latest_headline
-        thresholds = {
-            "1m": settings.alert_threshold_1m,
-            "5m": settings.alert_threshold_5m,
-            "15m": settings.alert_threshold_15m,
-        }
-        for label, threshold in thresholds.items():
-            ret = metrics.get(f"return_{label}")
-            if ret is None:
-                continue
-            if abs(ret) >= threshold:
-                key = (symbol, label)
-                last_ts = self.last_alert.get(key)
-                if last_ts and ts - last_ts < timedelta(seconds=60):
-                    continue
-                direction = "up" if ret >= 0 else "down"
-                api_key = None
-                if settings.llm_provider == "openai":
-                    api_key = settings.openai_api_key
-                elif settings.llm_provider == "google":
-                    api_key = settings.google_api_key
-                summary = llm_summarize(settings.llm_provider, api_key, symbol, label, ret, headline, sentiment)
-                alert_payload = {
-                    "time": ts.isoformat(),
-                    "symbol": symbol,
-                    "window": label,
-                    "direction": direction,
-                    "ret": ret,
-                    "threshold": threshold,
-                    "headline": headline,
-                    "sentiment": sentiment,
-                    "summary": summary,
-                }
-                await insert_anomaly(ts, symbol, label, direction, ret, threshold, headline, sentiment, summary)
-                await self.producer.send_and_wait(settings.alerts_topic, json.dumps(alert_payload).encode())
-                self.last_alert[key] = ts
+            await check_anomalies(self, symbol, ts, metrics or {})
 
 
 def main():

@@ -33,3 +33,24 @@ def test_compute_metrics_attention_and_returns():
     # attention should be >= |return_1m| / threshold_1m (0.05)
     expected_ratio = abs(metrics["return_1m"]) / 0.05
     assert metrics["attention"] >= expected_ratio
+
+
+def test_compute_metrics_attention_max_ratio():
+    pw = PriceWindow()
+    now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+    # Craft returns: ~4% over 1m, ~10% over 5m
+    data = [
+        (now - timedelta(minutes=5), 100.0),
+        (now - timedelta(minutes=1), 104.0),
+        (now, 110.0),
+    ]
+    for ts, p in data:
+        pw.add(ts, p)
+
+    price_windows = {"btcusdt": pw}
+    metrics = compute_metrics(price_windows, "btcusdt", now)
+    assert metrics is not None
+
+    # expected attention from 5m window: |10%| / 8% = 1.25
+    expected = abs(metrics["return_5m"]) / 0.08
+    assert pytest.approx(metrics["attention"], rel=1e-6) == expected

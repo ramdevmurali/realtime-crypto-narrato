@@ -2,7 +2,7 @@
 
 Repo scaffold only. Components:
 - backend/ : FastAPI service (to-be-built)
-- processor/ : streaming metrics/anomaly worker (to-be-built)
+- processor/ : streaming metrics/anomaly worker (built)
 - frontend/ : Next.js dashboard (to-be-built)
 - public/ : static assets
 - scripts/ : helper scripts
@@ -11,7 +11,7 @@ Repo scaffold only. Components:
 ## Resilience (processor quick notes)
 - backoff + jitter: reconnects on websocket/RSS use exponential wait with randomness
 - retries: DB/Kafka ops wrapped with small retries + backoff
-- circuit breaker counters: if ingest keeps failing, slow down retries and log counts
+- circuit-breaker counters: if ingest keeps failing, slow down retries and log counts
 - graceful cancellation: ingest tasks exit fast on stop; processor cancels tasks cleanly
 - startup healthcheck: ping DB (SELECT 1) and Kafka connect before running
 - structured logging + counters: key=value logs for publishes/failures/alerts

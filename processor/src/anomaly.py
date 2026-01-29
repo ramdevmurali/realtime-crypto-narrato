@@ -12,6 +12,8 @@ async def check_anomalies(processor, symbol: str, ts, metrics):
     producer = processor.producer
     assert producer
     log = getattr(processor, "log", get_logger(__name__))
+    if not hasattr(processor, "alerts_emitted"):
+        processor.alerts_emitted = 0
     headline, sentiment = processor.latest_headline
     thresholds = get_thresholds()
     for label, threshold in thresholds.items():
@@ -44,6 +46,7 @@ async def check_anomalies(processor, symbol: str, ts, metrics):
             await with_retries(insert_anomaly, ts, symbol, label, direction, ret, threshold, headline, sentiment, summary, log=log, op="insert_anomaly")
             await with_retries(producer.send_and_wait, settings.alerts_topic, json.dumps(alert_payload).encode(), log=log, op="send_alert")
             processor.last_alert[key] = ts
+            processor.alerts_emitted += 1
             log.info(
                 "alert_emitted",
                 extra={
@@ -54,3 +57,5 @@ async def check_anomalies(processor, symbol: str, ts, metrics):
                     "threshold": threshold,
                 },
             )
+            if processor.alerts_emitted % 50 == 0:
+                log.info("alerts_emitted_count", extra={"count": processor.alerts_emitted})

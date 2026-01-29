@@ -83,3 +83,29 @@ def test_check_anomalies_respects_rate_limit(monkeypatch):
     assert proc.last_alert[("btc", "1m")] == ts
     assert len(proc.producer.sent) == 1
     assert len(calls) == 1
+
+
+def test_check_anomalies_direction_up_down(monkeypatch):
+    calls = []
+
+    async def fake_insert_anomaly(*args, **kwargs):
+        calls.append(args)
+
+    monkeypatch.setattr(anomaly, "insert_anomaly", fake_insert_anomaly)
+
+    proc = FakeProcessor()
+    ts = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+
+    # positive return => up
+    metrics_up = {"return_1m": settings.alert_threshold_1m + 0.02}
+    asyncio.get_event_loop().run_until_complete(anomaly.check_anomalies(proc, "up", ts, metrics_up))
+
+    # negative return => down
+    metrics_down = {"return_1m": -settings.alert_threshold_1m - 0.02}
+    asyncio.get_event_loop().run_until_complete(anomaly.check_anomalies(proc, "down", ts + timedelta(seconds=70), metrics_down))
+
+    assert len(proc.producer.sent) == 2
+    up_payload = proc.producer.sent[0][1].decode()
+    down_payload = proc.producer.sent[1][1].decode()
+    assert '"direction": "up"' in up_payload
+    assert '"direction": "down"' in down_payload

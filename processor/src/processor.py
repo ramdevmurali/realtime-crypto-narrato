@@ -14,6 +14,7 @@ from .windows import PriceWindow
 from .ingest import price_ingest_task, news_ingest_task
 from .metrics import compute_metrics
 from .anomaly import check_anomalies
+from .logging_config import get_logger
 
 
 class StreamProcessor:
@@ -23,8 +24,10 @@ class StreamProcessor:
         self.price_windows: Dict[str, PriceWindow] = defaultdict(PriceWindow)
         self.last_alert: Dict[Tuple[str, str], datetime] = {}
         self.latest_headline: Tuple[str | None, float | None] = (None, None)
+        self.log = get_logger(__name__)
 
     async def start(self):
+        self.log.info("processor_starting", extra={"component": "processor"})
         await init_tables()
         self.producer = AIOKafkaProducer(bootstrap_servers=settings.kafka_brokers)
         await self.producer.start()
@@ -48,6 +51,7 @@ class StreamProcessor:
             await self.consumer.stop()
         if self.producer:
             await self.producer.stop()
+        self.log.info("processor_stopped", extra={"component": "processor"})
 
     async def process_prices_task(self):
         """Consume prices from Kafka, compute metrics, check anomalies."""

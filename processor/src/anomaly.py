@@ -4,12 +4,14 @@ import json
 from .config import settings, get_thresholds
 from .db import insert_anomaly
 from .utils import llm_summarize
+from .logging_config import get_logger
 
 
 async def check_anomalies(processor, symbol: str, ts, metrics):
     """Detect and publish anomalies for a symbol at time ts based on metrics."""
     producer = processor.producer
     assert producer
+    log = getattr(processor, "log", get_logger(__name__))
     headline, sentiment = processor.latest_headline
     thresholds = get_thresholds()
     for label, threshold in thresholds.items():
@@ -42,3 +44,13 @@ async def check_anomalies(processor, symbol: str, ts, metrics):
             await insert_anomaly(ts, symbol, label, direction, ret, threshold, headline, sentiment, summary)
             await producer.send_and_wait(settings.alerts_topic, json.dumps(alert_payload).encode())
             processor.last_alert[key] = ts
+            log.info(
+                "alert_emitted",
+                extra={
+                    "symbol": symbol,
+                    "window": label,
+                    "direction": direction,
+                    "ret": ret,
+                    "threshold": threshold,
+                },
+            )

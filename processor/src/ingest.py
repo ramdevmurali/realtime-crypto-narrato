@@ -7,6 +7,7 @@ from dateutil import parser as dateparser
 from .config import settings
 from .db import insert_headline
 from .utils import now_utc, simple_sentiment
+from .logging_config import get_logger
 
 
 async def process_feed_entry(processor, entry, seen_ids: set[str]):
@@ -37,6 +38,7 @@ async def process_feed_entry(processor, entry, seen_ids: set[str]):
 async def price_ingest_task(processor):
     """Stream prices from Binance and publish raw ticks to Kafka."""
     assert processor.producer
+    log = getattr(processor, "log", get_logger(__name__))
     stream_names = "/".join(f"{sym}@miniTicker" for sym in settings.symbols)
     url = f"{settings.binance_stream}?streams={stream_names}"
     while True:
@@ -50,19 +52,22 @@ async def price_ingest_task(processor):
                     ts = now_utc()
                     body = {"symbol": symbol, "price": price, "time": ts.isoformat()}
                     await processor.producer.send_and_wait(settings.price_topic, json.dumps(body).encode())
-        except Exception:
+                    log.info("price_published", extra={"symbol": symbol, "price": price})
+        except Exception as exc:
+            log.warning("price_ws_error", extra={"error": str(exc), "retry_seconds": 2})
             await asyncio.sleep(2)
 
 
 async def news_ingest_task(processor):
     """Poll RSS feed, sentiment tag, and publish headlines."""
     assert processor.producer
+    log = getattr(processor, "log", get_logger(__name__))
     seen_ids: set[str] = set()
     while True:
         try:
             feed = feedparser.parse(settings.news_rss)
             for entry in feed.entries[:20]:
                 await process_feed_entry(processor, entry, seen_ids)
-        except Exception:
-            pass
+        except Exception as exc:
+            log.warning("news_poll_error", extra={"error": str(exc)})
         await asyncio.sleep(60)

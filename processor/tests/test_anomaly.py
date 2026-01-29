@@ -130,3 +130,21 @@ def test_check_anomalies_includes_latest_headline_and_sentiment(monkeypatch):
     payload_str = proc.producer.sent[0][1].decode()
     assert "Breaking news" in payload_str
     assert "-0.3" in payload_str
+
+
+def test_check_anomalies_no_metrics_no_alert(monkeypatch):
+    calls = []
+
+    async def fake_insert_anomaly(*args, **kwargs):
+        calls.append(args)
+
+    monkeypatch.setattr(anomaly, "insert_anomaly", fake_insert_anomaly)
+
+    proc = FakeProcessor()
+    ts = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+
+    asyncio.get_event_loop().run_until_complete(anomaly.check_anomalies(proc, "btc", ts, {}))
+
+    assert len(proc.producer.sent) == 0
+    assert len(calls) == 0
+    assert proc.last_alert == {}

@@ -61,3 +61,25 @@ def test_check_anomalies_below_threshold_no_alert(monkeypatch):
     assert ("ethusdt", "1m") not in proc.last_alert
     assert len(proc.producer.sent) == 0
     assert len(calls) == 0
+
+
+def test_check_anomalies_respects_rate_limit(monkeypatch):
+    calls = []
+
+    async def fake_insert_anomaly(*args, **kwargs):
+        calls.append(args)
+
+    monkeypatch.setattr(anomaly, "insert_anomaly", fake_insert_anomaly)
+
+    proc = FakeProcessor()
+    ts = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+    metrics = {"return_1m": settings.alert_threshold_1m + 0.02}
+
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(anomaly.check_anomalies(proc, "btc", ts, metrics))
+    # Second call within 60s should be suppressed
+    loop.run_until_complete(anomaly.check_anomalies(proc, "btc", ts + timedelta(seconds=10), metrics))
+
+    assert proc.last_alert[("btc", "1m")] == ts
+    assert len(proc.producer.sent) == 1
+    assert len(calls) == 1

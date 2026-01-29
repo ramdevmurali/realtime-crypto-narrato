@@ -49,3 +49,35 @@ def test_get_return_insufficient_data():
     assert win.get_return(now, timedelta(minutes=1)) is None
     assert win.get_return(now, timedelta(minutes=5)) is None
     assert win.get_return(now, timedelta(minutes=15)) is None
+
+
+def test_get_vol_insufficient_data():
+    win = PriceWindow()
+    now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+    # fewer than 3 prices
+    win.add(now - timedelta(minutes=1), 100)
+    win.add(now, 101)
+
+    assert win.get_vol(now, timedelta(minutes=5)) is None
+
+
+def test_get_vol_happy_path():
+    win = PriceWindow()
+    now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+    prices = [100, 102, 101, 104]  # simple oscillation
+    times = [now - timedelta(minutes=3), now - timedelta(minutes=2), now - timedelta(minutes=1), now]
+    for ts, p in zip(times, prices):
+        win.add(ts, p)
+
+    vol = win.get_vol(now, timedelta(minutes=5))
+    assert vol is not None
+    # manual stddev of step returns
+    returns = [
+        (102 - 100) / 100,
+        (101 - 102) / 102,
+        (104 - 101) / 101,
+    ]
+    mean = sum(returns) / len(returns)
+    expected_var = sum((r - mean) ** 2 for r in returns) / len(returns)
+    expected_vol = expected_var ** 0.5
+    assert pytest.approx(vol, rel=1e-6) == expected_vol

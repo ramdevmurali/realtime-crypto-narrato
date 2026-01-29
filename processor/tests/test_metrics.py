@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 from processor.src.metrics import compute_metrics
 from processor.src.windows import PriceWindow
 

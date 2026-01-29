@@ -54,3 +54,36 @@ def test_compute_metrics_attention_max_ratio():
     # expected attention from 5m window: |10%| / 8% = 1.25
     expected = abs(metrics["return_5m"]) / 0.08
     assert pytest.approx(metrics["attention"], rel=1e-6) == expected
+
+
+def test_compute_metrics_propagates_returns_and_vol():
+    pw = PriceWindow()
+    now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+    # Prices crafted to give clear returns and vols over 5m window
+    data = [
+        (now - timedelta(minutes=5), 100.0),
+        (now - timedelta(minutes=3), 110.0),
+        (now - timedelta(minutes=1), 105.0),
+        (now, 115.5),
+    ]
+    for ts, p in data:
+        pw.add(ts, p)
+
+    price_windows = {"ethusdt": pw}
+    metrics = compute_metrics(price_windows, "ethusdt", now)
+    assert metrics is not None
+
+    expected_return_5m = (115.5 - 100.0) / 100.0  # 0.155
+    assert pytest.approx(metrics["return_5m"], rel=1e-6) == expected_return_5m
+
+    # vol over the prices within 5m
+    window_prices = [100.0, 110.0, 105.0, 115.5]
+    returns = []
+    for i in range(1, len(window_prices)):
+        prev = window_prices[i - 1]
+        cur = window_prices[i]
+        returns.append((cur - prev) / prev)
+    mean = sum(returns) / len(returns)
+    expected_var = sum((r - mean) ** 2 for r in returns) / len(returns)
+    expected_vol = expected_var ** 0.5
+    assert pytest.approx(metrics["vol_5m"], rel=1e-6) == expected_vol

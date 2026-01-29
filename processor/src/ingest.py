@@ -6,7 +6,7 @@ from dateutil import parser as dateparser
 
 from .config import settings
 from .db import insert_headline
-from .utils import now_utc, simple_sentiment
+from .utils import now_utc, simple_sentiment, sleep_backoff
 from .logging_config import get_logger
 
 
@@ -41,9 +41,11 @@ async def price_ingest_task(processor):
     log = getattr(processor, "log", get_logger(__name__))
     stream_names = "/".join(f"{sym}@miniTicker" for sym in settings.symbols)
     url = f"{settings.binance_stream}?streams={stream_names}"
+    attempt = 0
     while True:
         try:
             async with websockets.connect(url) as ws:
+                attempt = 0
                 async for msg in ws:
                     data = json.loads(msg)
                     payload = data.get("data", {})
@@ -54,8 +56,9 @@ async def price_ingest_task(processor):
                     await processor.producer.send_and_wait(settings.price_topic, json.dumps(body).encode())
                     log.info("price_published", extra={"symbol": symbol, "price": price})
         except Exception as exc:
-            log.warning("price_ws_error", extra={"error": str(exc), "retry_seconds": 2})
-            await asyncio.sleep(2)
+            log.warning("price_ws_error", extra={"error": str(exc), "attempt": attempt})
+            await sleep_backoff(attempt, base=1, cap=30)
+            attempt += 1
 
 
 async def news_ingest_task(processor):
@@ -63,11 +66,16 @@ async def news_ingest_task(processor):
     assert processor.producer
     log = getattr(processor, "log", get_logger(__name__))
     seen_ids: set[str] = set()
+    attempt = 0
     while True:
         try:
             feed = feedparser.parse(settings.news_rss)
+            attempt = 0
             for entry in feed.entries[:20]:
                 await process_feed_entry(processor, entry, seen_ids)
         except Exception as exc:
-            log.warning("news_poll_error", extra={"error": str(exc)})
+            log.warning("news_poll_error", extra={"error": str(exc), "attempt": attempt})
+            await sleep_backoff(attempt, base=5, cap=60)
+            attempt += 1
+            continue
         await asyncio.sleep(60)

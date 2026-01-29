@@ -1,6 +1,8 @@
 from __future__ import annotations
 import math
 from datetime import datetime, timezone
+import random
+import asyncio
 from typing import Optional
 
 POSITIVE_WORDS = {"surge", "gain", "up", "bull", "approval", "positive", "green"}
@@ -69,3 +71,10 @@ def llm_summarize(provider: str, api_key: Optional[str], symbol: str, window: st
         return base_summary
 
     return base_summary
+
+
+async def sleep_backoff(attempt: int, base: float = 1.0, cap: float = 30.0):
+    """Exponential backoff with jitter, capped."""
+    wait = min(cap, base * (2 ** attempt))
+    wait = wait * (0.5 + random.random())  # jitter 0.5x-1.5x
+    await asyncio.sleep(wait)

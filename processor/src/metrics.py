@@ -1,5 +1,5 @@
 from datetime import timedelta
-from .config import settings
+from .config import settings, get_thresholds
 
 
 def compute_metrics(price_windows, symbol: str, ts):
@@ -16,11 +16,7 @@ def compute_metrics(price_windows, symbol: str, ts):
         metrics[f"vol_{label}"] = win.get_vol(ts, delta)
 
     ratios = []
-    thr = {
-        "1m": settings.alert_threshold_1m,
-        "5m": settings.alert_threshold_5m,
-        "15m": settings.alert_threshold_15m,
-    }
+    thr = get_thresholds()
     for label in ["1m", "5m", "15m"]:
         r = metrics.get(f"return_{label}")
         if r is not None and thr[label] > 0:

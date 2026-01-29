@@ -1,7 +1,7 @@
 from datetime import timedelta
 import json
 
-from .config import settings
+from .config import settings, get_thresholds
 from .db import insert_anomaly
 from .utils import llm_summarize
 
@@ -11,11 +11,7 @@ async def check_anomalies(processor, symbol: str, ts, metrics):
     producer = processor.producer
     assert producer
     headline, sentiment = processor.latest_headline
-    thresholds = {
-        "1m": settings.alert_threshold_1m,
-        "5m": settings.alert_threshold_5m,
-        "15m": settings.alert_threshold_15m,
-    }
+    thresholds = get_thresholds()
     for label, threshold in thresholds.items():
         ret = metrics.get(f"return_{label}") if metrics else None
         if ret is None:

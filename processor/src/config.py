@@ -40,3 +40,12 @@ class Settings(BaseSettings):
             values['symbols'] = _csv(values.get('SYMBOLS'), ["btcusdt", "ethusdt"])
         super().__init__(**values)
 settings = Settings()
+
+
+def get_thresholds():
+    """Return alert thresholds per window."""
+    return {
+        "1m": settings.alert_threshold_1m,
+        "5m": settings.alert_threshold_5m,
+        "15m": settings.alert_threshold_15m,
+    }

@@ -7,6 +7,25 @@ from processor.src import ingest
 from processor.src.config import settings
 
 
+class FakeWS:
+    def __init__(self, messages):
+        self.messages = messages
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        if not self.messages:
+            raise StopAsyncIteration
+        return self.messages.pop(0)
+
+
 class FakeProducer:
     def __init__(self):
         self.sent = []
@@ -51,3 +70,29 @@ async def test_process_feed_entry_dedupes(monkeypatch):
     assert published is False
     assert len(proc.producer.sent) == 1
     assert len(calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_price_ingest_task_publishes_once(monkeypatch):
+    fake_msg = json.dumps({
+        "data": {"s": "BTCUSDT", "c": "43210.12"}
+    })
+
+    async def fake_connect(url):
+        return FakeWS([fake_msg])
+
+    monkeypatch.setattr(ingest.websockets, "connect", fake_connect)
+
+    proc = FakeProcessor()
+    proc.producer = FakeProducer()
+
+    task = asyncio.create_task(ingest.price_ingest_task(proc))
+    await asyncio.sleep(0.01)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert len(proc.producer.sent) == 1
+    topic, payload = proc.producer.sent[0]
+    assert topic == settings.price_topic
+    assert b"43210.12" in payload

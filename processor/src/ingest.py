@@ -61,6 +61,9 @@ async def price_ingest_task(processor):
                     price_messages_sent += 1
                     if price_messages_sent % 500 == 0:
                         log.info("price_published_count", extra={"count": price_messages_sent})
+        except asyncio.CancelledError:
+            log.info("price_ingest_cancelled")
+            break
         except Exception as exc:
             log.warning("price_ws_error", extra={"error": str(exc), "attempt": attempt, "failures": failures})
             backoff_base = 2 if failures >= 5 else 1
@@ -89,6 +92,9 @@ async def news_ingest_task(processor):
                 news_messages_sent += 1
                 if news_messages_sent % 200 == 0:
                     log.info("news_published_count", extra={"count": news_messages_sent})
+        except asyncio.CancelledError:
+            log.info("news_ingest_cancelled")
+            break
         except Exception as exc:
             log.warning("news_poll_error", extra={"error": str(exc), "attempt": attempt, "failures": failures})
             backoff_base = 10 if failures >= 5 else 5

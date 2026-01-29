@@ -40,11 +40,19 @@ class StreamProcessor:
         )
         await self.consumer.start()
 
-        await asyncio.gather(
-            price_ingest_task(self),
-            news_ingest_task(self),
-            self.process_prices_task(),
-        )
+        tasks = [
+            asyncio.create_task(price_ingest_task(self)),
+            asyncio.create_task(news_ingest_task(self)),
+            asyncio.create_task(self.process_prices_task()),
+        ]
+        try:
+            await asyncio.gather(*tasks)
+        except asyncio.CancelledError:
+            self.log.info("processor_cancelled")
+        finally:
+            for t in tasks:
+                t.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
 
     async def stop(self):
         if self.consumer:

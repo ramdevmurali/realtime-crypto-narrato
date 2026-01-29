@@ -7,8 +7,10 @@ from typing import Dict, Tuple
 from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
 from dateutil import parser as dateparser
 
+import contextlib
+
 from .config import settings
-from .db import init_tables, insert_price, insert_metric
+from .db import init_tables, insert_price, insert_metric, get_pool
 from .utils import now_utc, with_retries
 from .windows import PriceWindow
 from .ingest import price_ingest_task, news_ingest_task
@@ -28,6 +30,7 @@ class StreamProcessor:
 
     async def start(self):
         self.log.info("processor_starting", extra={"component": "processor"})
+        await self.healthcheck()
         await init_tables()
         self.producer = AIOKafkaProducer(bootstrap_servers=settings.kafka_brokers)
         await self.producer.start()
@@ -60,6 +63,29 @@ class StreamProcessor:
         if self.producer:
             await self.producer.stop()
         self.log.info("processor_stopped", extra={"component": "processor"})
+
+    async def healthcheck(self):
+        # DB check
+        try:
+            pool = await get_pool()
+            async with pool.acquire() as conn:
+                await conn.fetchval("SELECT 1;")
+            self.log.info("db_health_ok")
+        except Exception as exc:
+            self.log.error("db_health_fail", extra={"error": str(exc)})
+            raise
+
+        # Kafka check
+        temp_prod = AIOKafkaProducer(bootstrap_servers=settings.kafka_brokers)
+        try:
+            await temp_prod.start()
+            self.log.info("kafka_health_ok")
+        except Exception as exc:
+            self.log.error("kafka_health_fail", extra={"error": str(exc)})
+            raise
+        finally:
+            with contextlib.suppress(Exception):
+                await temp_prod.stop()
 
     async def process_prices_task(self):
         """Consume prices from Kafka, compute metrics, check anomalies."""

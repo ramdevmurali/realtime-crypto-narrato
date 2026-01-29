@@ -42,10 +42,12 @@ async def price_ingest_task(processor):
     stream_names = "/".join(f"{sym}@miniTicker" for sym in settings.symbols)
     url = f"{settings.binance_stream}?streams={stream_names}"
     attempt = 0
+    failures = 0
     while True:
         try:
             async with websockets.connect(url) as ws:
                 attempt = 0
+                failures = 0
                 async for msg in ws:
                     data = json.loads(msg)
                     payload = data.get("data", {})
@@ -56,9 +58,11 @@ async def price_ingest_task(processor):
                     await with_retries(processor.producer.send_and_wait, settings.price_topic, json.dumps(body).encode(), log=log, op="send_price")
                     log.info("price_published", extra={"symbol": symbol, "price": price})
         except Exception as exc:
-            log.warning("price_ws_error", extra={"error": str(exc), "attempt": attempt})
-            await sleep_backoff(attempt, base=1, cap=30)
+            log.warning("price_ws_error", extra={"error": str(exc), "attempt": attempt, "failures": failures})
+            backoff_base = 2 if failures >= 5 else 1
+            await sleep_backoff(attempt, base=backoff_base, cap=60)
             attempt += 1
+            failures += 1
 
 
 async def news_ingest_task(processor):
@@ -67,15 +71,19 @@ async def news_ingest_task(processor):
     log = getattr(processor, "log", get_logger(__name__))
     seen_ids: set[str] = set()
     attempt = 0
+    failures = 0
     while True:
         try:
             feed = feedparser.parse(settings.news_rss)
             attempt = 0
+            failures = 0
             for entry in feed.entries[:20]:
                 await process_feed_entry(processor, entry, seen_ids)
         except Exception as exc:
-            log.warning("news_poll_error", extra={"error": str(exc), "attempt": attempt})
-            await sleep_backoff(attempt, base=5, cap=60)
+            log.warning("news_poll_error", extra={"error": str(exc), "attempt": attempt, "failures": failures})
+            backoff_base = 10 if failures >= 5 else 5
+            await sleep_backoff(attempt, base=backoff_base, cap=90)
             attempt += 1
+            failures += 1
             continue
         await asyncio.sleep(60)

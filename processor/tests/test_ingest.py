@@ -1,4 +1,5 @@
 import asyncio
+import json
 from datetime import datetime, timezone
 
 import pytest
@@ -8,6 +9,9 @@ from processor.src.config import settings
 
 
 class FakeWS:
+    class StopStream(BaseException):
+        pass
+
     def __init__(self, messages):
         self.messages = messages
 
@@ -22,7 +26,7 @@ class FakeWS:
 
     async def __anext__(self):
         if not self.messages:
-            raise StopAsyncIteration
+            raise FakeWS.StopStream
         return self.messages.pop(0)
 
 
@@ -78,7 +82,7 @@ async def test_price_ingest_task_publishes_once(monkeypatch):
         "data": {"s": "BTCUSDT", "c": "43210.12"}
     })
 
-    async def fake_connect(url):
+    def fake_connect(url):
         return FakeWS([fake_msg])
 
     monkeypatch.setattr(ingest.websockets, "connect", fake_connect)
@@ -86,11 +90,8 @@ async def test_price_ingest_task_publishes_once(monkeypatch):
     proc = FakeProcessor()
     proc.producer = FakeProducer()
 
-    task = asyncio.create_task(ingest.price_ingest_task(proc))
-    await asyncio.sleep(0.01)
-    task.cancel()
-    with pytest.raises(asyncio.CancelledError):
-        await task
+    with pytest.raises(FakeWS.StopStream):
+        await ingest.price_ingest_task(proc)
 
     assert len(proc.producer.sent) == 1
     topic, payload = proc.producer.sent[0]

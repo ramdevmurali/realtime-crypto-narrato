@@ -9,7 +9,7 @@ from dateutil import parser as dateparser
 
 from .config import settings
 from .db import init_tables, insert_price, insert_metric
-from .utils import now_utc
+from .utils import now_utc, with_retries
 from .windows import PriceWindow
 from .ingest import price_ingest_task, news_ingest_task
 from .metrics import compute_metrics
@@ -62,10 +62,10 @@ class StreamProcessor:
             price = float(data.get('price'))
             ts = dateparser.parse(data.get('time')) if data.get('time') else now_utc()
 
-            await insert_price(ts, symbol, price)
+            await with_retries(insert_price, ts, symbol, price, log=self.log, op="insert_price")
             win = self.price_windows[symbol]
             win.add(ts, price)
             metrics = compute_metrics(self.price_windows, symbol, ts)
             if metrics:
-                await insert_metric(ts, symbol, metrics)
+                await with_retries(insert_metric, ts, symbol, metrics, log=self.log, op="insert_metric")
             await check_anomalies(self, symbol, ts, metrics or {})

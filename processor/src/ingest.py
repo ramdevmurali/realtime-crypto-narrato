@@ -6,7 +6,7 @@ from dateutil import parser as dateparser
 
 from .config import settings
 from .db import insert_headline
-from .utils import now_utc, simple_sentiment, sleep_backoff
+from .utils import now_utc, simple_sentiment, sleep_backoff, with_retries
 from .logging_config import get_logger
 
 
@@ -29,9 +29,9 @@ async def process_feed_entry(processor, entry, seen_ids: set[str]):
         "source": source,
         "sentiment": sentiment,
     }
-    await insert_headline(ts, title, source, url, sentiment)
+    await with_retries(insert_headline, ts, title, source, url, sentiment, log=getattr(processor, "log", None), op="insert_headline")
     processor.latest_headline = (title, sentiment)
-    await processor.producer.send_and_wait(settings.news_topic, json.dumps(payload).encode())
+    await with_retries(processor.producer.send_and_wait, settings.news_topic, json.dumps(payload).encode(), log=getattr(processor, "log", None), op="send_news")
     return True
 
 
@@ -53,7 +53,7 @@ async def price_ingest_task(processor):
                     price = float(payload.get("c", 0))
                     ts = now_utc()
                     body = {"symbol": symbol, "price": price, "time": ts.isoformat()}
-                    await processor.producer.send_and_wait(settings.price_topic, json.dumps(body).encode())
+                    await with_retries(processor.producer.send_and_wait, settings.price_topic, json.dumps(body).encode(), log=log, op="send_price")
                     log.info("price_published", extra={"symbol": symbol, "price": price})
         except Exception as exc:
             log.warning("price_ws_error", extra={"error": str(exc), "attempt": attempt})

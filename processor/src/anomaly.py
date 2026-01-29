@@ -3,7 +3,7 @@ import json
 
 from .config import settings, get_thresholds
 from .db import insert_anomaly
-from .utils import llm_summarize
+from .utils import llm_summarize, with_retries
 from .logging_config import get_logger
 
 
@@ -41,8 +41,8 @@ async def check_anomalies(processor, symbol: str, ts, metrics):
                 "sentiment": sentiment,
                 "summary": summary,
             }
-            await insert_anomaly(ts, symbol, label, direction, ret, threshold, headline, sentiment, summary)
-            await producer.send_and_wait(settings.alerts_topic, json.dumps(alert_payload).encode())
+            await with_retries(insert_anomaly, ts, symbol, label, direction, ret, threshold, headline, sentiment, summary, log=log, op="insert_anomaly")
+            await with_retries(producer.send_and_wait, settings.alerts_topic, json.dumps(alert_payload).encode(), log=log, op="send_alert")
             processor.last_alert[key] = ts
             log.info(
                 "alert_emitted",

@@ -78,3 +78,21 @@ async def sleep_backoff(attempt: int, base: float = 1.0, cap: float = 30.0):
     wait = min(cap, base * (2 ** attempt))
     wait = wait * (0.5 + random.random())  # jitter 0.5x-1.5x
     await asyncio.sleep(wait)
+
+
+async def with_retries(fn, *args, max_attempts: int = 3, log=None, op: str | None = None, **kwargs):
+    """Run an async fn with bounded retries and backoff."""
+    op_name = op or getattr(fn, "__name__", "operation")
+    attempt = 0
+    while True:
+        try:
+            return await fn(*args, **kwargs)
+        except Exception as exc:
+            attempt += 1
+            if log:
+                log.warning("op_failed", extra={"op": op_name, "attempt": attempt, "error": str(exc)})
+            if attempt >= max_attempts:
+                if log:
+                    log.error("op_dropped", extra={"op": op_name, "error": str(exc)})
+                raise
+            await sleep_backoff(attempt)

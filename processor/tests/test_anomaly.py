@@ -109,3 +109,24 @@ def test_check_anomalies_direction_up_down(monkeypatch):
     down_payload = proc.producer.sent[1][1].decode()
     assert '"direction": "up"' in up_payload
     assert '"direction": "down"' in down_payload
+
+
+def test_check_anomalies_includes_latest_headline_and_sentiment(monkeypatch):
+    calls = []
+
+    async def fake_insert_anomaly(*args, **kwargs):
+        calls.append(args)
+
+    monkeypatch.setattr(anomaly, "insert_anomaly", fake_insert_anomaly)
+
+    proc = FakeProcessor()
+    proc.latest_headline = ("Breaking news", -0.3)
+    ts = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+    metrics = {"return_1m": settings.alert_threshold_1m + 0.02}
+
+    asyncio.get_event_loop().run_until_complete(anomaly.check_anomalies(proc, "btc", ts, metrics))
+
+    assert len(proc.producer.sent) == 1
+    payload_str = proc.producer.sent[0][1].decode()
+    assert "Breaking news" in payload_str
+    assert "-0.3" in payload_str

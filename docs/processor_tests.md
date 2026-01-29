@@ -1,4 +1,4 @@
-# Processor tests (for now just the windows suite)
+# Processor tests
 
 - `test_windows.py`
   - What it is: checks the PriceWindow helper.

@@ -15,6 +15,7 @@
   - Raw return z-scores computed over intra-window returns
   - EWMA return z-scores smooth raw z, cap at ±6, None when no raw z
   - Vol z-scores per window and spike flags when z exceeds threshold
+  - Return percentile bands (p05/p95) per window with None when insufficient data
 
 - `test_anomaly.py`
   - Alert trigger logic (no real Kafka/DB)

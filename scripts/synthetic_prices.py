@@ -5,11 +5,11 @@ import sys
 from datetime import datetime, timedelta, timezone
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(os.path.join(ROOT, "..", "processor", "src"))
+sys.path.append(os.path.join(ROOT, ".."))  # so we can import src.* when /app is PYTHONPATH
 
-from windows import PriceWindow  # type: ignore
-from metrics import compute_metrics  # type: ignore
-from db import insert_price, insert_metric, get_pool, close_pool  # type: ignore
+from src.windows import PriceWindow  # type: ignore
+from src.metrics import compute_metrics  # type: ignore
+from src.db import insert_price, insert_metric, get_pool, close_pool  # type: ignore
 
 
 async def run():

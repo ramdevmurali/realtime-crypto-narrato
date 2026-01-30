@@ -94,7 +94,14 @@ async def insert_price(time, symbol, price):
     pool = await get_pool()
     async with pool.acquire() as conn:
         await conn.execute(
-            "INSERT INTO prices(time, symbol, price) VALUES($1, $2, $3)", time, symbol, price
+            """
+            INSERT INTO prices(time, symbol, price)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (time, symbol) DO NOTHING
+            """,
+            time,
+            symbol,
+            price,
         )
 
 

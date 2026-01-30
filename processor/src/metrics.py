@@ -1,6 +1,7 @@
 from datetime import timedelta
 from .config import settings, get_thresholds
 from typing import List
+import math
 
 
 def _returns_for_window(win, ts, window: timedelta) -> List[float]:
@@ -41,6 +42,20 @@ def _ewma(prev: float | None, value: float | None, alpha: float, cap: float = 6.
     return smoothed
 
 
+def _percentile(series: List[float], pct: float):
+    if not series:
+        return None
+    s = sorted(series)
+    k = (len(s) - 1) * pct
+    f = math.floor(k)
+    c = math.ceil(k)
+    if f == c:
+        return s[int(k)]
+    d0 = s[f] * (c - k)
+    d1 = s[c] * (k - f)
+    return d0 + d1
+
+
 def compute_metrics(price_windows, symbol: str, ts):
     win = price_windows[symbol]
     windows = {
@@ -65,6 +80,13 @@ def compute_metrics(price_windows, symbol: str, ts):
         thr_spike = settings.vol_z_spike_threshold
         vz = metrics[f"vol_z_{label}"]
         metrics[f"vol_spike_{label}"] = vz is not None and vz > thr_spike
+        # percentiles on returns
+        if len(rets_series) >= 3:
+            metrics[f"p05_return_{label}"] = _percentile(rets_series, settings.return_percentile_low)
+            metrics[f"p95_return_{label}"] = _percentile(rets_series, settings.return_percentile_high)
+        else:
+            metrics[f"p05_return_{label}"] = None
+            metrics[f"p95_return_{label}"] = None
 
     ratios = []
     thr = get_thresholds()

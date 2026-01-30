@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
 import pytest
+import math
 
 from processor.src.metrics import compute_metrics
 from processor.src import metrics as metrics_module
@@ -170,6 +171,55 @@ def test_vol_z_none_with_insufficient_data():
     # metrics not None because returns exist, but vol_z should be None
     if metrics is not None:
         assert metrics["vol_z_1m"] is None
+
+
+def test_return_percentiles_happy_path(monkeypatch):
+    pw = PriceWindow()
+    now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+    prices = [100, 110, 90, 120, 150]  # returns series will vary
+    times = [
+        now - timedelta(minutes=4),
+        now - timedelta(minutes=3),
+        now - timedelta(minutes=2),
+        now - timedelta(minutes=1),
+        now,
+    ]
+    for ts, p in zip(times, prices):
+        pw.add(ts, p)
+
+    # override percentiles to 0.25 and 0.75 for deterministic check
+    monkeypatch.setattr(config_module.settings, "return_percentile_low", 0.25)
+    monkeypatch.setattr(config_module.settings, "return_percentile_high", 0.75)
+
+    price_windows = {"btcusdt": pw}
+    metrics = compute_metrics(price_windows, "btcusdt", now)
+    assert metrics is not None
+    # build expected from returns series
+    returns = []
+    for i in range(1, len(prices)):
+        returns.append((prices[i] - prices[i - 1]) / prices[i - 1])
+    returns_sorted = sorted(returns)
+    def interp(p):
+        k = (len(returns_sorted) - 1) * p
+        f = int(k)
+        c = math.ceil(k)
+        if f == c:
+            return returns_sorted[f]
+        return returns_sorted[f] * (c - k) + returns_sorted[c] * (k - f)
+    assert pytest.approx(metrics["p05_return_5m"], rel=1e-6) == interp(0.25)
+    assert pytest.approx(metrics["p95_return_5m"], rel=1e-6) == interp(0.75)
+
+
+def test_return_percentiles_insufficient_data():
+    pw = PriceWindow()
+    now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+    pw.add(now - timedelta(minutes=1), 100.0)
+    pw.add(now, 101.0)  # only one return
+    price_windows = {"btcusdt": pw}
+    metrics = compute_metrics(price_windows, "btcusdt", now)
+    if metrics is not None:
+        assert metrics["p05_return_1m"] is None
+        assert metrics["p95_return_1m"] is None
 
 
 def test_return_z_ewma_smoothing(monkeypatch):

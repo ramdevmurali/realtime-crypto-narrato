@@ -26,6 +26,8 @@ class Settings(BaseSettings):
 
     ewma_return_alpha: float = 0.25  # smoothing for return z-scores
     vol_z_spike_threshold: float = 3.0  # flag vol spikes
+    return_percentile_low: float = 0.05
+    return_percentile_high: float = 0.95  # percentiles for return bands
 
     llm_provider: str = "stub"  # stub|openai|google
     openai_api_key: str | None = None

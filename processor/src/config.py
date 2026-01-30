@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     alert_threshold_15m: float = 0.12
 
     ewma_return_alpha: float = 0.25  # smoothing for return z-scores
+    vol_z_spike_threshold: float = 3.0  # flag vol spikes
 
     llm_provider: str = "stub"  # stub|openai|google
     openai_api_key: str | None = None

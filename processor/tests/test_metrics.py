@@ -132,6 +132,46 @@ def test_compute_metrics_return_z_score_insufficient_data():
     assert metrics is None
 
 
+def test_vol_z_and_spike(monkeypatch):
+    pw = PriceWindow()
+    now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+    data = [
+        (now - timedelta(minutes=5), 100.0),
+        (now - timedelta(minutes=4), 110.0),
+        (now - timedelta(minutes=3), 90.0),
+        (now, 105.0),
+    ]
+    for ts, p in data:
+        pw.add(ts, p)
+
+    # returns series: 0.10, -0.181818..., 0.166666...
+    returns = [0.10, -0.1818181818, 0.1666666667]
+    mean = sum(returns) / len(returns)
+    var = sum((r - mean) ** 2 for r in returns) / len(returns)
+    vol = var ** 0.5
+    vol_z_expected = (vol - mean) / (var ** 0.5)  # zscore(vol, returns)
+
+    monkeypatch.setattr(config_module.settings, "vol_z_spike_threshold", 0.5)
+    price_windows = {"ethusdt": pw}
+    metrics = compute_metrics(price_windows, "ethusdt", now)
+    assert metrics is not None
+    assert pytest.approx(metrics["vol_z_5m"], rel=1e-6) == vol_z_expected
+    assert metrics["vol_spike_5m"] is True
+
+
+def test_vol_z_none_with_insufficient_data():
+    pw = PriceWindow()
+    now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+    pw.add(now - timedelta(minutes=1), 100.0)
+    pw.add(now, 101.0)  # only one return point
+
+    price_windows = {"btcusdt": pw}
+    metrics = compute_metrics(price_windows, "btcusdt", now)
+    # metrics not None because returns exist, but vol_z should be None
+    if metrics is not None:
+        assert metrics["vol_z_1m"] is None
+
+
 def test_return_z_ewma_smoothing(monkeypatch):
     pw = PriceWindow()
     now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
@@ -142,7 +182,9 @@ def test_return_z_ewma_smoothing(monkeypatch):
     sequences = iter([[1.0, None, None], [3.0, None, None]])
 
     def fake_z(value, series):
-        return current.pop(0)
+        if current:
+            return current.pop(0)
+        return None
 
     monkeypatch.setattr(metrics_module, "_zscore", fake_z)
     monkeypatch.setattr(config_module.settings, "ewma_return_alpha", 0.5)

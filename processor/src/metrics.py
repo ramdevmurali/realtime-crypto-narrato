@@ -52,7 +52,8 @@ def compute_metrics(price_windows, symbol: str, ts):
     for label, delta in windows.items():
         ret = win.get_return(ts, delta)
         metrics[f"return_{label}"] = ret
-        metrics[f"vol_{label}"] = win.get_vol(ts, delta)
+        vol = win.get_vol(ts, delta)
+        metrics[f"vol_{label}"] = vol
         rets_series = _returns_for_window(win, ts, delta)
         metrics[f"return_z_{label}"] = _zscore(ret, rets_series)
         # smoothed z per window
@@ -60,6 +61,10 @@ def compute_metrics(price_windows, symbol: str, ts):
         smoothed = _ewma(win.z_ewma.get(label), raw_z, settings.ewma_return_alpha)
         win.z_ewma[label] = smoothed
         metrics[f"return_z_ewma_{label}"] = smoothed
+        metrics[f"vol_z_{label}"] = _zscore(vol, rets_series)
+        thr_spike = settings.vol_z_spike_threshold
+        vz = metrics[f"vol_z_{label}"]
+        metrics[f"vol_spike_{label}"] = vz is not None and vz > thr_spike
 
     ratios = []
     thr = get_thresholds()

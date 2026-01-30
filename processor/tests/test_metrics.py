@@ -89,3 +89,42 @@ def test_compute_metrics_propagates_returns_and_vol():
     expected_var = sum((r - mean) ** 2 for r in returns) / len(returns)
     expected_vol = expected_var ** 0.5
     assert pytest.approx(metrics["vol_5m"], rel=1e-6) == expected_vol
+
+
+def test_compute_metrics_return_z_scores():
+    pw = PriceWindow()
+    now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+    # Prices within 5m: 100 -> 110 -> 90 -> 105
+    data = [
+        (now - timedelta(minutes=5), 100.0),
+        (now - timedelta(minutes=4), 110.0),
+        (now - timedelta(minutes=3), 90.0),
+        (now, 105.0),
+    ]
+    for ts, p in data:
+        pw.add(ts, p)
+
+    price_windows = {"ethusdt": pw}
+    metrics = compute_metrics(price_windows, "ethusdt", now)
+    assert metrics is not None
+
+    # return_5m uses oldest vs latest: (105-100)/100 = 0.05
+    assert pytest.approx(metrics["return_5m"], rel=1e-6) == 0.05
+
+    # returns series inside window: [0.10, -0.181818, 0.1666667]
+    returns = [0.10, -0.1818181818, 0.1666666667]
+    mean = sum(returns) / len(returns)
+    var = sum((r - mean) ** 2 for r in returns) / len(returns)
+    std = var ** 0.5
+    expected_z = (0.05 - mean) / std
+    assert pytest.approx(metrics["return_z_5m"], rel=1e-6) == expected_z
+
+
+def test_compute_metrics_return_z_score_insufficient_data():
+    pw = PriceWindow()
+    now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+    pw.add(now, 100.0)  # only one point
+    price_windows = {"btcusdt": pw}
+    metrics = compute_metrics(price_windows, "btcusdt", now)
+    # metrics is None overall, but if it weren't, z-scores would be None due to insufficient data
+    assert metrics is None

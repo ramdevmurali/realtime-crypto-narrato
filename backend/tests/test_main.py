@@ -39,3 +39,24 @@ def test_health_failure(monkeypatch):
     resp = client.get("/health")
     assert resp.status_code == 503
     assert "db_unhealthy" in resp.json()["detail"]
+
+def test_prices_endpoint(monkeypatch):
+    calls = {}
+
+    async def fake_fetch_prices(symbol, limit):
+        calls["symbol"] = symbol
+        calls["limit"] = limit
+        return [
+            {"time": "2026-01-27T12:00:00Z", "symbol": symbol, "price": 123.45},
+        ]
+
+    monkeypatch.setattr(db, "fetch_prices", fake_fetch_prices)
+
+    client = TestClient(main.app)
+    resp = client.get("/prices", params={"symbol": "BTCUSDT", "limit": 3})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert calls["symbol"] == "btcusdt"
+    assert calls["limit"] == 3
+    assert isinstance(body, list) and len(body) == 1
+    assert set(body[0].keys()) == {"time", "symbol", "price"}

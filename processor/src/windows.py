@@ -6,6 +6,8 @@ from typing import Deque, Tuple
 class PriceWindow:
     def __init__(self):
         self.buffer: Deque[Tuple[datetime, float]] = deque()
+        # per-window smoothed z-score state
+        self.z_ewma = {}
 
     def add(self, ts: datetime, price: float):
         self.buffer.append((ts, price))

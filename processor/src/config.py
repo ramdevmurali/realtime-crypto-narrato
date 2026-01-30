@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     alert_threshold_5m: float = 0.08
     alert_threshold_15m: float = 0.12
 
+    ewma_return_alpha: float = 0.25  # smoothing for return z-scores
+
     llm_provider: str = "stub"  # stub|openai|google
     openai_api_key: str | None = None
     google_api_key: str | None = None

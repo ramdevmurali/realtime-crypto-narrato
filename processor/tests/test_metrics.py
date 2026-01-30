@@ -3,7 +3,9 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from processor.src.metrics import compute_metrics
+from processor.src import metrics as metrics_module
 from processor.src.windows import PriceWindow
+from processor.src import config as config_module
 
 
 def test_compute_metrics_returns_none_with_no_history():
@@ -128,3 +130,63 @@ def test_compute_metrics_return_z_score_insufficient_data():
     metrics = compute_metrics(price_windows, "btcusdt", now)
     # metrics is None overall, but if it weren't, z-scores would be None due to insufficient data
     assert metrics is None
+
+
+def test_return_z_ewma_smoothing(monkeypatch):
+    pw = PriceWindow()
+    now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+    pw.add(now - timedelta(minutes=2), 100.0)
+    pw.add(now, 110.0)
+
+    # Feed controlled z-scores per call: first 1.0 then 3.0 for the 1m window
+    sequences = iter([[1.0, None, None], [3.0, None, None]])
+
+    def fake_z(value, series):
+        return current.pop(0)
+
+    monkeypatch.setattr(metrics_module, "_zscore", fake_z)
+    monkeypatch.setattr(config_module.settings, "ewma_return_alpha", 0.5)
+
+    price_windows = {"btcusdt": pw}
+
+    current = next(sequences)
+    metrics1 = compute_metrics(price_windows, "btcusdt", now)
+    assert metrics1["return_z_ewma_1m"] == pytest.approx(1.0)
+
+    # add a new price to keep window populated and change z-score
+    later = now + timedelta(seconds=30)
+    pw.add(later, 120.0)
+
+    current = next(sequences)
+    metrics2 = compute_metrics(price_windows, "btcusdt", later)
+    # ewma: 1 + 0.5*(3-1) = 2
+    assert metrics2["return_z_ewma_1m"] == pytest.approx(2.0)
+
+
+def test_return_z_ewma_none_when_no_raw(monkeypatch):
+    pw = PriceWindow()
+    now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+    pw.add(now - timedelta(minutes=5), 100.0)
+    pw.add(now, 105.0)
+
+    monkeypatch.setattr(metrics_module, "_zscore", lambda v, s: None)
+    price_windows = {"btcusdt": pw}
+    metrics = compute_metrics(price_windows, "btcusdt", now)
+    assert metrics is not None
+    assert metrics["return_z_ewma_1m"] is None
+    assert metrics["return_z_ewma_5m"] is None
+    assert metrics["return_z_ewma_15m"] is None
+
+
+def test_return_z_ewma_cap(monkeypatch):
+    pw = PriceWindow()
+    now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+    pw.add(now - timedelta(minutes=5), 100.0)
+    pw.add(now, 200.0)
+
+    monkeypatch.setattr(metrics_module, "_zscore", lambda v, s: 10.0)
+    monkeypatch.setattr(config_module.settings, "ewma_return_alpha", 1.0)
+
+    price_windows = {"btcusdt": pw}
+    metrics = compute_metrics(price_windows, "btcusdt", now)
+    assert metrics["return_z_ewma_5m"] == pytest.approx(6.0)

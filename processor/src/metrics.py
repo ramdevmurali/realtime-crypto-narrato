@@ -29,6 +29,18 @@ def _zscore(value: float, series: List[float]):
     return (value - mean) / std
 
 
+def _ewma(prev: float | None, value: float | None, alpha: float, cap: float = 6.0):
+    if value is None:
+        return None
+    smoothed = value if prev is None else prev + alpha * (value - prev)
+    # cap to avoid runaway values
+    if smoothed > cap:
+        smoothed = cap
+    if smoothed < -cap:
+        smoothed = -cap
+    return smoothed
+
+
 def compute_metrics(price_windows, symbol: str, ts):
     win = price_windows[symbol]
     windows = {
@@ -43,6 +55,11 @@ def compute_metrics(price_windows, symbol: str, ts):
         metrics[f"vol_{label}"] = win.get_vol(ts, delta)
         rets_series = _returns_for_window(win, ts, delta)
         metrics[f"return_z_{label}"] = _zscore(ret, rets_series)
+        # smoothed z per window
+        raw_z = metrics[f"return_z_{label}"]
+        smoothed = _ewma(win.z_ewma.get(label), raw_z, settings.ewma_return_alpha)
+        win.z_ewma[label] = smoothed
+        metrics[f"return_z_ewma_{label}"] = smoothed
 
     ratios = []
     thr = get_thresholds()

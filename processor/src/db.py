@@ -204,3 +204,10 @@ async def insert_anomaly(time, symbol, window, direction, ret, threshold, headli
             sentiment,
             summary,
         )
+
+
+async def close_pool():
+    global _pool
+    if _pool is not None:
+        await _pool.close()
+        _pool = None

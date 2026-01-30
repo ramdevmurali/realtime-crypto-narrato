@@ -9,6 +9,11 @@ def test_metrics_latest_ok(monkeypatch):
             "time": "2026-01-27T12:00:00Z",
             "symbol": symbol,
             "return_1m": 0.02,
+            "return_z_ewma_1m": 1.5,
+            "vol_z_1m": 0.8,
+            "vol_spike_1m": False,
+            "p05_return_1m": -0.03,
+            "p95_return_1m": 0.06,
         }
 
     monkeypatch.setattr(db, "fetch_latest_metrics", fake_fetch_latest_metrics)
@@ -19,6 +24,11 @@ def test_metrics_latest_ok(monkeypatch):
     body = resp.json()
     assert body["symbol"] == "ethusdt"
     assert body["return_1m"] == 0.02
+    assert body["return_z_ewma_1m"] == 1.5
+    assert body["vol_z_1m"] == 0.8
+    assert body["vol_spike_1m"] is False
+    assert body["p05_return_1m"] == -0.03
+    assert body["p95_return_1m"] == 0.06
 
 
 def test_metrics_latest_not_found(monkeypatch):

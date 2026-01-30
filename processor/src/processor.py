@@ -103,3 +103,17 @@ class StreamProcessor:
             if metrics:
                 await with_retries(insert_metric, ts, symbol, metrics, log=self.log, op="insert_metric")
             await check_anomalies(self, symbol, ts, metrics or {})
+
+
+async def main():
+    processor = StreamProcessor()
+    try:
+        await processor.start()
+    except KeyboardInterrupt:
+        processor.log.info("processor_shutdown_requested")
+    finally:
+        await processor.stop()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

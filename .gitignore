@@ -3,3 +3,7 @@ infra/.env
 __pycache__/
 *.pyc
 .env.*
+TODO.md
+.TODO.md
+.venv/
+.DS_Store

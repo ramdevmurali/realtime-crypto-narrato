@@ -13,11 +13,11 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file='.env', env_prefix='', extra='ignore')
 
     database_url: str = "postgres://postgres:postgres@timescaledb:5432/anomalies"
-    kafka_brokers: List[str] = Field(default_factory=lambda: ["redpanda:29092"])
+    kafka_brokers_raw: str = "redpanda:29092"
     redis_url: str | None = "redis://redis:6379/0"
 
     binance_stream: str = "wss://stream.binance.com:9443/stream"
-    symbols: List[str] = Field(default_factory=lambda: ["btcusdt", "ethusdt"])
+    symbols_raw: str = "btcusdt,ethusdt"
     news_rss: str = "https://www.coindesk.com/arc/outboundfeeds/rss/"
 
     alert_threshold_1m: float = 0.05
@@ -33,12 +33,18 @@ class Settings(BaseSettings):
     alerts_topic: str = "alerts"
 
     def __init__(self, **values):
-        # allow CSV env overrides
-        if 'KAFKA_BROKERS' in values:
-            values['kafka_brokers'] = _csv(values.get('KAFKA_BROKERS'), ["redpanda:29092"])
+        # allow CSV env overrides for symbols
         if 'SYMBOLS' in values:
-            values['symbols'] = _csv(values.get('SYMBOLS'), ["btcusdt", "ethusdt"])
+            values['symbols_raw'] = values.get('SYMBOLS')
         super().__init__(**values)
+
+    @property
+    def kafka_brokers(self) -> List[str]:
+        return _csv(self.kafka_brokers_raw, ["redpanda:29092"])
+
+    @property
+    def symbols(self) -> List[str]:
+        return _csv(self.symbols_raw, ["btcusdt", "ethusdt"])
 settings = Settings()
 
 

@@ -21,27 +21,36 @@ class Settings(BaseSettings):
             env_file="../infra/.env",
             env_file_encoding="utf-8",
             case_sensitive=False,
+            extra="ignore",
+            # Prevent pydantic from trying to json.loads list-like envs; we parse CSV ourselves.
+            json_loads=lambda v: v,
         )
     else:  # pragma: no cover - legacy fallback
         class Config:
             env_file = "../infra/.env"
             env_file_encoding = "utf-8"
             case_sensitive = False
+            extra = "ignore"
 
     database_url: str = "postgresql://postgres:postgres@timescaledb:5432/postgres"
-    kafka_brokers: List[str] = ["redpanda:29092"]
+    # store raw string from env; expose list via property
+    kafka_brokers_raw: str = "redpanda:29092"
     price_topic: str = "prices"
     news_topic: str = "news"
     alerts_topic: str = "alerts"
     api_host: str = "0.0.0.0"
     api_port: int = 8000
 
-    @field_validator("kafka_brokers", mode="before")
+    @field_validator("kafka_brokers_raw", mode="before")
     @classmethod
     def parse_brokers(cls, v):
-        if isinstance(v, str):
-            return _split_csv(v)
-        return v
+        if v is None:
+            return ""
+        return str(v)
+
+    @property
+    def kafka_brokers(self) -> List[str]:
+        return _split_csv(self.kafka_brokers_raw)
 
 
 settings = Settings()

@@ -1,9 +1,9 @@
 import os
-import asyncio
 from datetime import datetime, timezone, timedelta
 
 import asyncpg
 import pytest
+import pytest_asyncio
 import httpx
 
 TEST_SYMBOL = "testcoin"
@@ -16,20 +16,22 @@ def _default_db_url():
     )
 
 
-@pytest.fixture(scope="session")
+@pytest_asyncio.fixture
 async def db_pool():
     pool = await asyncpg.create_pool(dsn=_default_db_url(), min_size=1, max_size=3)
-    yield pool
-    await pool.close()
+    try:
+        yield pool
+    finally:
+        await pool.close()
 
 
-@pytest.fixture(scope="session")
+@pytest_asyncio.fixture
 async def client():
     async with httpx.AsyncClient(base_url="http://localhost:8000") as c:
         yield c
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def seed_data(db_pool):
     ts = datetime.now(timezone.utc)
     prices = [

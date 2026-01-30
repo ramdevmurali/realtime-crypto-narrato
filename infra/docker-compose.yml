@@ -2,7 +2,7 @@ version: "3.9"
 
 services:
   redpanda:
-    image: docker.vectorized.io/vectorized/redpanda:v23.3.12
+    image: redpandadata/redpanda:v23.3.12
     container_name: redpanda
     command:
       - redpanda start

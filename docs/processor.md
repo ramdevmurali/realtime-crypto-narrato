@@ -16,7 +16,7 @@
 - `db.py` — asyncpg pool; creates Timescale hypertables (prices, metrics, headlines, anomalies); insert helpers.
 - `utils.py` — now_utc, simple_sentiment stub, llm_summarize (stub/OpenAI/Gemini), backoff helpers (`sleep_backoff`, `with_retries`).
 - `windows.py` — in-memory PriceWindow: add/prune (>16m), returns (1m/5m/15m), volatility per window, keeps smoothed z-score state.
-- `metrics.py` — computes rolling returns/vol per symbol from PriceWindow; emits raw return z-scores and EWMA-smoothed return z-scores per window.
+- `metrics.py` — computes rolling returns/vol per symbol from PriceWindow; emits raw return z-scores, EWMA-smoothed return z-scores, and volatility z-scores + spike flags per window.
 - `anomaly.py` — threshold checks, rate-limit (60s), direction, summarizes, persists + publishes alerts.
 - `ingest.py` — tasks:
   - `price_ingest_task`: Binance WS → Kafka `prices` → Timescale `prices`.
@@ -27,7 +27,7 @@
 
 ## Data written to Timescale
 - `prices(time, symbol, price, PK (time, symbol))`
-- `metrics(time, symbol, return_1m/5m/15m, vol_1m/5m/15m, return_z_1m/5m/15m, return_z_ewma_1m/5m/15m, attention)`
+- `metrics(time, symbol, return_1m/5m/15m, vol_1m/5m/15m, return_z_1m/5m/15m, return_z_ewma_1m/5m/15m, vol_z_1m/5m/15m, vol_spike_1m/5m/15m, attention)`
 - `headlines(time, title, source, url, sentiment)`
 - `anomalies(time, symbol, window_name, direction, return_value, threshold, headline, sentiment, summary)`
 

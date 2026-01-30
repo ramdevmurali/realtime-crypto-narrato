@@ -64,7 +64,7 @@ async def seed_data(db_pool):
         )
         await conn.executemany(
             """
-            INSERT INTO anomalies(time, symbol, window, direction, return, threshold, summary, headline, sentiment)
+            INSERT INTO anomalies(time, symbol, window_name, direction, return_value, threshold, summary, headline, sentiment)
             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)
             """,
             alerts,

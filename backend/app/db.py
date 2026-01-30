@@ -58,7 +58,16 @@ async def fetch_headlines(limit: int = 20):
 async def fetch_alerts(limit: int = 20):
     pool = await get_pool()
     query = """
-        SELECT time, symbol, window, direction, return, threshold, summary, headline, sentiment
+        SELECT
+            time,
+            symbol,
+            window_name AS window,
+            return_value AS return,
+            direction,
+            threshold,
+            summary,
+            headline,
+            sentiment
         FROM anomalies
         ORDER BY time DESC
         LIMIT $1

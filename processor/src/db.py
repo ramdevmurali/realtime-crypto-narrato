@@ -72,14 +72,14 @@ async def init_tables():
                 CREATE TABLE IF NOT EXISTS anomalies (
                     time TIMESTAMPTZ NOT NULL,
                     symbol TEXT NOT NULL,
-                    window TEXT NOT NULL,
+                    window_name TEXT NOT NULL,
                     direction TEXT,
-                    ret DOUBLE PRECISION,
+                    return_value DOUBLE PRECISION,
                     threshold DOUBLE PRECISION,
                     headline TEXT,
                     sentiment DOUBLE PRECISION,
                     summary TEXT,
-                    PRIMARY KEY (time, symbol, window)
+                    PRIMARY KEY (time, symbol, window_name)
                 );
                 """
             )
@@ -136,7 +136,7 @@ async def insert_anomaly(time, symbol, window, direction, ret, threshold, headli
     async with pool.acquire() as conn:
         await conn.execute(
             """
-            INSERT INTO anomalies(time, symbol, window, direction, ret, threshold, headline, sentiment, summary)
+            INSERT INTO anomalies(time, symbol, window_name, direction, return_value, threshold, headline, sentiment, summary)
             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)
             ON CONFLICT DO NOTHING
             """,

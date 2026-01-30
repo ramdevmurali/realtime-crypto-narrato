@@ -43,14 +43,14 @@ CREATE INDEX IF NOT EXISTS idx_headlines_time_desc ON headlines(time DESC);
 CREATE TABLE IF NOT EXISTS anomalies (
     time        TIMESTAMPTZ NOT NULL,
     symbol      TEXT NOT NULL,
-    window      TEXT NOT NULL,
+    window_name TEXT NOT NULL,
     direction   TEXT,
-    ret         DOUBLE PRECISION,
+    return_value DOUBLE PRECISION,
     threshold   DOUBLE PRECISION,
     headline    TEXT,
     sentiment   DOUBLE PRECISION,
     summary     TEXT,
-    PRIMARY KEY (time, symbol, window)
+    PRIMARY KEY (time, symbol, window_name)
 );
 SELECT create_hypertable('anomalies', 'time', if_not_exists => TRUE);
 CREATE INDEX IF NOT EXISTS idx_anomalies_symbol_time_desc ON anomalies(symbol, time DESC);

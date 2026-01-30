@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 import asyncio
+import os
+import sys
 from datetime import datetime, timedelta, timezone
 
-from processor.src.windows import PriceWindow
-from processor.src.metrics import compute_metrics
-from processor.src.db import insert_price, insert_metric, get_pool, close_pool
+ROOT = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(os.path.join(ROOT, "..", "processor", "src"))
+
+from windows import PriceWindow  # type: ignore
+from metrics import compute_metrics  # type: ignore
+from db import insert_price, insert_metric, get_pool, close_pool  # type: ignore
 
 
 async def run():

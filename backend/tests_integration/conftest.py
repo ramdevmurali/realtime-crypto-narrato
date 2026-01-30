@@ -12,7 +12,7 @@ TEST_SYMBOL = "testcoin"
 def _default_db_url():
     return os.getenv(
         "DATABASE_URL",
-        "postgresql://postgres:postgres@localhost:5432/postgres",
+        "postgresql://postgres:postgres@localhost:5432/anomalies",
     )
 
 

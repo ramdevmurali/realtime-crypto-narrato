@@ -1,20 +1,22 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException, Query
 import uvicorn
 
 from .config import settings
 from . import db
 
-app = FastAPI(title="Realtime Crypto Backend")
 
-
-@app.on_event("startup")
-async def startup():
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
     await db.get_pool()
+    try:
+        yield
+    finally:
+        await db.close_pool()
 
 
-@app.on_event("shutdown")
-async def shutdown():
-    await db.close_pool()
+app = FastAPI(title="Realtime Crypto Backend", lifespan=lifespan)
 
 
 @app.get("/health")

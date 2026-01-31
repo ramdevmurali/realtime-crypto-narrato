@@ -91,7 +91,11 @@ class StreamProcessor:
         """Consume prices from Kafka, compute metrics, check anomalies."""
         assert self.consumer
         async for msg in self.consumer:
-            data = json.loads(msg.value.decode())
+            try:
+                data = json.loads(msg.value.decode())
+            except json.JSONDecodeError:
+                self.log.warning("price_message_decode_failed", extra={"raw": msg.value})
+                continue
             symbol = data.get('symbol')
             price = float(data.get('price'))
             ts = dateparser.parse(data.get('time')) if data.get('time') else now_utc()

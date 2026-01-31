@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     news_topic: str = "news"
     alerts_topic: str = "alerts"
     summaries_topic: str = "summaries"
+    price_dlq_topic: str = "prices-deadletter"
     summary_consumer_group: str = "summary-sidecar"
     summary_poll_timeout_ms: int = 500
     summary_batch_max: int | None = None

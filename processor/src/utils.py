@@ -63,7 +63,7 @@ def llm_summarize(provider: str, api_key: Optional[str], symbol: str, window: st
                 f"Summarize crypto move for dashboard alert: {symbol.upper()} {magnitude} {direction} over {window}. "
                 f"Latest headline: {headline or 'none'}. Sentiment {sentiment_word}. Keep concise, <50 words."
             )
-            resp = genai.GenerativeModel("gemini-pro").generate_content(prompt)
+            resp = genai.GenerativeModel("gemini-2.5-flash").generate_content(prompt)
             # google client returns .text on success
             return resp.text.strip() if hasattr(resp, "text") and resp.text else base_summary
     except Exception:

@@ -27,6 +27,7 @@ class StreamProcessor:
         self.last_alert: Dict[Tuple[str, str], datetime] = {}
         self.latest_headline: Tuple[str | None, float | None] = (None, None)
         self.bad_price_messages = 0
+        self.bad_price_log_every = 50
         self.log = get_logger(__name__)
 
     async def start(self):
@@ -96,10 +97,14 @@ class StreamProcessor:
                 data = json.loads(msg.value.decode())
             except json.JSONDecodeError:
                 self.bad_price_messages += 1
-                self.log.warning(
-                    "price_message_decode_failed",
-                    extra={"raw": msg.value, "bad_price_messages": self.bad_price_messages},
-                )
+                if self.bad_price_messages == 1 or self.bad_price_messages % self.bad_price_log_every == 0:
+                    self.log.warning(
+                        "price_message_decode_failed",
+                        extra={
+                            "raw": msg.value,
+                            "bad_price_messages": self.bad_price_messages,
+                        },
+                    )
                 if self.producer:
                     with contextlib.suppress(Exception):
                         await self.producer.send_and_wait(settings.price_dlq_topic, msg.value)

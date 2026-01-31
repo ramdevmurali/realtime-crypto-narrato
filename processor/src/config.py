@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     llm_provider: str = "stub"  # stub|openai|google
     openai_api_key: str | None = None
     google_api_key: str | None = None
+    google_model: str = "gemini-2.5-flash"
+    openai_model: str = "gpt-3.5-turbo"
 
     price_topic: str = "prices"
     news_topic: str = "news"

@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import random
 import asyncio
 from typing import Optional
+from .config import settings
 
 POSITIVE_WORDS = {"surge", "gain", "up", "bull", "approval", "positive", "green"}
 NEGATIVE_WORDS = {"drop", "loss", "down", "bear", "selloff", "crash", "negative"}
@@ -49,7 +50,7 @@ def llm_summarize(provider: str, api_key: Optional[str], symbol: str, window: st
                 f"Latest headline: {headline or 'none'}. Sentiment {sentiment_word}. Keep it under 50 words."
             )
             resp = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo",
+                model=settings.openai_model,
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=80,
                 temperature=0.3,
@@ -63,7 +64,7 @@ def llm_summarize(provider: str, api_key: Optional[str], symbol: str, window: st
                 f"Summarize crypto move for dashboard alert: {symbol.upper()} {magnitude} {direction} over {window}. "
                 f"Latest headline: {headline or 'none'}. Sentiment {sentiment_word}. Keep concise, <50 words."
             )
-            resp = genai.GenerativeModel("gemini-2.5-flash").generate_content(prompt)
+            resp = genai.GenerativeModel(settings.google_model).generate_content(prompt)
             # google client returns .text on success
             return resp.text.strip() if hasattr(resp, "text") and resp.text else base_summary
     except Exception:

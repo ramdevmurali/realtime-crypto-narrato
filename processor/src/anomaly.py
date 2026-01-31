@@ -26,12 +26,8 @@ async def check_anomalies(processor, symbol: str, ts, metrics):
             if last_ts and ts - last_ts < timedelta(seconds=60):
                 continue
             direction = "up" if ret >= 0 else "down"
-            api_key = None
-            if settings.llm_provider == "openai":
-                api_key = settings.openai_api_key
-            elif settings.llm_provider == "google":
-                api_key = settings.google_api_key
-            summary = llm_summarize(settings.llm_provider, api_key, symbol, label, ret, headline, sentiment)
+            # Use the base/stub summary locally; offload richer LLM to summaries topic.
+            summary = llm_summarize("stub", None, symbol, label, ret, headline, sentiment)
             alert_payload = {
                 "time": ts.isoformat(),
                 "symbol": symbol,
@@ -43,6 +39,25 @@ async def check_anomalies(processor, symbol: str, ts, metrics):
                 "sentiment": sentiment,
                 "summary": summary,
             }
+            # Publish summary-request for sidecar to enrich asynchronously.
+            await with_retries(
+                producer.send_and_wait,
+                settings.summaries_topic,
+                json.dumps(
+                    {
+                        "time": ts.isoformat(),
+                        "symbol": symbol,
+                        "window": label,
+                        "direction": direction,
+                        "ret": ret,
+                        "threshold": threshold,
+                        "headline": headline,
+                        "sentiment": sentiment,
+                    }
+                ).encode(),
+                log=log,
+                op="send_summary_request",
+            )
             await with_retries(insert_anomaly, ts, symbol, label, direction, ret, threshold, headline, sentiment, summary, log=log, op="insert_anomaly")
             await with_retries(producer.send_and_wait, settings.alerts_topic, json.dumps(alert_payload).encode(), log=log, op="send_alert")
             processor.last_alert[key] = ts

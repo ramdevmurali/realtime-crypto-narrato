@@ -4,7 +4,10 @@ from datetime import datetime, timezone
 import random
 import asyncio
 from typing import Optional
-from .config import settings
+try:
+    from .config import settings
+except ImportError:
+    from config import settings
 
 POSITIVE_WORDS = {"surge", "gain", "up", "bull", "approval", "positive", "green"}
 NEGATIVE_WORDS = {"drop", "loss", "down", "bear", "selloff", "crash", "negative"}

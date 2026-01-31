@@ -24,11 +24,14 @@
   - Direction up/down correct
   - Payload carries latest headline/sentiment
   - Empty metrics → no alert, state unchanged
+  - Each alert emits two Kafka messages: summary-request to `summaries` and the alert to `alerts`.
 
 - `test_ingest.py`
   - Ingest helpers without real feeds
   - process_feed_entry dedupes via seen_ids (publish/insert once)
   - price_ingest_task publishes one price from a mocked miniTicker websocket
+- `test_summary_sidecar.py`
+  - Sidecar handler consumes summary request, calls LLM (stubbed), updates anomalies summary field, and republishes enriched alert to `alerts`.
 
 ## How to run
 From repo root or `processor/`:

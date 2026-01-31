@@ -83,6 +83,29 @@ services:
       PRICE_TOPIC: prices
       NEWS_TOPIC: news
       ALERTS_TOPIC: alerts
+      SUMMARIES_TOPIC: summaries
+    networks:
+      - streaming
+
+  summary-sidecar:
+    build: ../processor
+    container_name: summary-sidecar
+    depends_on:
+      - redpanda
+      - timescaledb
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      KAFKA_BROKERS: ${KAFKA_BROKERS}
+      LLM_PROVIDER: ${LLM_PROVIDER}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+      GOOGLE_MODEL: ${GOOGLE_MODEL}
+      OPENAI_MODEL: ${OPENAI_MODEL}
+      ALERTS_TOPIC: alerts
+      SUMMARIES_TOPIC: summaries
+      PYTHONPATH: /app/src
+    working_dir: /app
+    command: python -m services.summary_sidecar
     networks:
       - streaming
 

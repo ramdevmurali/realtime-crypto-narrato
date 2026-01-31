@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     price_topic: str = "prices"
     news_topic: str = "news"
     alerts_topic: str = "alerts"
+    summaries_topic: str = "summaries"
+    summary_consumer_group: str = "summary-sidecar"
+    summary_poll_timeout_ms: int = 500
+    summary_batch_max: int | None = None
 
     def __init__(self, **values):
         # allow CSV env overrides for symbols

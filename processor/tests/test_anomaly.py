@@ -38,10 +38,13 @@ async def test_check_anomalies_triggers_and_updates_state(monkeypatch):
     await anomaly.check_anomalies(proc, "btcusdt", ts, metrics)
 
     assert proc.last_alert[("btcusdt", "1m")] == ts
-    assert len(proc.producer.sent) == 1
-    topic, payload = proc.producer.sent[0]
-    assert topic == settings.alerts_topic
-    assert b"btcusdt" in payload
+    assert len(proc.producer.sent) == 2  # summary request + alert
+    topic0, payload0 = proc.producer.sent[0]
+    assert topic0 == settings.summaries_topic
+    assert b"btcusdt" in payload0
+    topic1, payload1 = proc.producer.sent[1]
+    assert topic1 == settings.alerts_topic
+    assert b"btcusdt" in payload1
     assert len(calls) == 1  # insert_anomaly called
 
 
@@ -83,7 +86,7 @@ async def test_check_anomalies_respects_rate_limit(monkeypatch):
     await anomaly.check_anomalies(proc, "btc", ts + timedelta(seconds=10), metrics)
 
     assert proc.last_alert[("btc", "1m")] == ts
-    assert len(proc.producer.sent) == 1
+    assert len(proc.producer.sent) == 2  # summary+alert once
     assert len(calls) == 1
 
 
@@ -107,9 +110,9 @@ async def test_check_anomalies_direction_up_down(monkeypatch):
     metrics_down = {"return_1m": -settings.alert_threshold_1m - 0.02}
     await anomaly.check_anomalies(proc, "down", ts + timedelta(seconds=70), metrics_down)
 
-    assert len(proc.producer.sent) == 2
-    up_payload = proc.producer.sent[0][1].decode()
-    down_payload = proc.producer.sent[1][1].decode()
+    assert len(proc.producer.sent) == 4  # summary+alert for each
+    up_payload = proc.producer.sent[1][1].decode()
+    down_payload = proc.producer.sent[3][1].decode()
     assert '"direction": "up"' in up_payload
     assert '"direction": "down"' in down_payload
 
@@ -130,8 +133,8 @@ async def test_check_anomalies_includes_latest_headline_and_sentiment(monkeypatc
 
     await anomaly.check_anomalies(proc, "btc", ts, metrics)
 
-    assert len(proc.producer.sent) == 1
-    payload_str = proc.producer.sent[0][1].decode()
+    assert len(proc.producer.sent) == 2  # summary+alert
+    payload_str = proc.producer.sent[1][1].decode()
     assert "Breaking news" in payload_str
     assert "-0.3" in payload_str
 

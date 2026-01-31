@@ -31,6 +31,12 @@
 - `headlines(time, title, source, url, sentiment)`
 - `anomalies(time, symbol, window_name, direction, return_value, threshold, headline, sentiment, summary)`
 
+## Alert path and summaries
+- Threshold check & cooldown happen in `anomaly.py`; if tripped, the alert is persisted to Timescale and published to the `alerts` topic.
+- The processor no longer calls the LLM in the hot path. It publishes a summary-request message to the `summaries` topic with `{time, symbol, window, direction, ret, threshold, headline, sentiment}`. Alerts still carry the base/stub summary.
+- A future sidecar can consume `summaries`, call the configured LLM, and backfill richer summaries asynchronously.
+  - Sidecar knobs: `SUMMARY_CONSUMER_GROUP`, `SUMMARY_POLL_TIMEOUT_MS`, `SUMMARY_BATCH_MAX` (optional) control consumption behavior.
+
 ## How to run
 ```
 cd infra

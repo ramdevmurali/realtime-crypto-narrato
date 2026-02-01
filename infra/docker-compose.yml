@@ -84,8 +84,11 @@ services:
       NEWS_TOPIC: news
       ALERTS_TOPIC: alerts
       SUMMARIES_TOPIC: summaries
+      PYTHONPATH: /app
     networks:
       - streaming
+    working_dir: /app
+    command: python -m src.app
 
   summary-sidecar:
     build: ../processor
@@ -103,9 +106,9 @@ services:
       OPENAI_MODEL: ${OPENAI_MODEL}
       ALERTS_TOPIC: alerts
       SUMMARIES_TOPIC: summaries
-      PYTHONPATH: /app/src
+      PYTHONPATH: /app
     working_dir: /app
-    command: python -m services.summary_sidecar
+    command: python -m src.services.summary_sidecar
     networks:
       - streaming
 

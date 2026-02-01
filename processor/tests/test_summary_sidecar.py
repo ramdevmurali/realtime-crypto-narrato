@@ -2,9 +2,6 @@ import asyncio
 import json
 import pytest
 
-import sys, pathlib
-sys.path.append(str(pathlib.Path(__file__).resolve().parents[2] / "processor" / "src"))
-
 from services import summary_sidecar  # type: ignore
 from config import settings  # type: ignore
 

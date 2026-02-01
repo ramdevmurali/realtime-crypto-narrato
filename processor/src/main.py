@@ -1,5 +1,5 @@
 import asyncio
-from .processor import StreamProcessor
+from .app import StreamProcessor
 
 
 def main():

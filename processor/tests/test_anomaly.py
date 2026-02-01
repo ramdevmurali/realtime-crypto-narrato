@@ -2,6 +2,7 @@ import asyncio
 from datetime import datetime, timezone, timedelta
 
 import pytest
+import json
 
 from processor.src import anomaly
 from processor.src.config import settings
@@ -111,10 +112,10 @@ async def test_check_anomalies_direction_up_down(monkeypatch):
     await anomaly.check_anomalies(proc, "down", ts + timedelta(seconds=70), metrics_down)
 
     assert len(proc.producer.sent) == 4  # summary+alert for each
-    up_payload = proc.producer.sent[1][1].decode()
-    down_payload = proc.producer.sent[3][1].decode()
-    assert '"direction": "up"' in up_payload
-    assert '"direction": "down"' in down_payload
+    up_payload = json.loads(proc.producer.sent[1][1].decode())
+    down_payload = json.loads(proc.producer.sent[3][1].decode())
+    assert up_payload["direction"] == "up"
+    assert down_payload["direction"] == "down"
 
 
 @pytest.mark.asyncio

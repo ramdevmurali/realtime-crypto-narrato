@@ -88,10 +88,11 @@ async def news_ingest_task(processor):
             attempt = 0
             failures = 0
             for entry in feed.entries[:20]:
-                await process_feed_entry(processor, entry, seen_ids)
-                news_messages_sent += 1
-                if news_messages_sent % 200 == 0:
-                    log.info("news_published_count", extra={"count": news_messages_sent})
+                sent = await process_feed_entry(processor, entry, seen_ids)
+                if sent:
+                    news_messages_sent += 1
+                    if news_messages_sent % 200 == 0:
+                        log.info("news_published_count", extra={"count": news_messages_sent})
         except asyncio.CancelledError:
             log.info("news_ingest_cancelled")
             break

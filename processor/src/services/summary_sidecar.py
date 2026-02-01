@@ -4,9 +4,9 @@ import signal
 import asyncpg
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 
-from config import settings
-from logging_config import get_logger
-from utils import llm_summarize, with_retries
+from src.config import settings
+from src.logging_config import get_logger
+from src.utils import llm_summarize, with_retries
 
 
 log = get_logger(__name__)

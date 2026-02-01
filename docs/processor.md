@@ -10,9 +10,11 @@
 - Graceful cancellation of tasks; startup healthcheck for DB/Kafka.
 - Structured logging and lightweight counters (price/news publishes, alerts).
 - Deduped price inserts via `ON CONFLICT (time, symbol) DO NOTHING`.
+- Bad price guards: JSON decode errors are counted, warning is rate-limited (first + every 50th), and the raw payload is sent to a price DLQ topic; processing continues.
 
 ## Modules
 - `config.py` — pydantic settings (DB URL, Kafka brokers/topics, Binance stream, symbols, RSS, thresholds, LLM keys). CSV env parsing for brokers/symbols.
+  - DLQ knob: `price_dlq_topic` (default `prices-deadletter`).
 - `db.py` — asyncpg pool; creates Timescale hypertables (prices, metrics, headlines, anomalies); insert helpers.
 - `utils.py` — now_utc, simple_sentiment stub, llm_summarize (stub/OpenAI/Gemini), backoff helpers (`sleep_backoff`, `with_retries`).
 - `windows.py` — in-memory PriceWindow: add/prune (>16m), returns (1m/5m/15m), volatility per window, keeps smoothed z-score state.
@@ -22,8 +24,8 @@
   - `price_ingest_task`: Binance WS → Kafka `prices` → Timescale `prices`.
   - `news_ingest_task`: RSS → dedupe → sentiment stub → Kafka `news` → Timescale `headlines`.
   - Includes backoff/jitter, counters, graceful cancel.
-- `processor.py` — orchestrator: healthcheck DB/Kafka, start producer/consumer, run process_prices_task, manage state (price windows, last alert, latest headline).
-- `main.py` — entrypoint (`python -m src.processor`).
+- `app.py` (entrypoint: `python -m src.app`) — orchestrator: healthcheck DB/Kafka, start producer/consumer, run process_prices_task, manage state (price windows, last alert, latest headline).
+- `main.py` — thin wrapper kept for legacy usage (imports StreamProcessor). Preferred entrypoint is `python -m src.app`.
 
 ## Data written to Timescale
 - `prices(time, symbol, price, PK (time, symbol))`
@@ -40,8 +42,9 @@
 ## How to run
 ```
 cd infra
-docker compose up -d processor redpanda timescaledb
+docker compose up -d redpanda timescaledb processor summary-sidecar backend   # containers use PYTHONPATH=/app
 ```
+Local/tests PYTHONPATH: `PYTHONPATH=processor/src:.`
 
 ## Tests (processor)
 - Unit coverage for PriceWindow (prune/returns/vol), metrics propagation, anomaly triggers/rate limit/direction, ingest dedupe/news processing.

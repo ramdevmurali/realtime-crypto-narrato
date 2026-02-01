@@ -25,7 +25,7 @@
   - `news_ingest_task`: RSS → dedupe → sentiment stub → Kafka `news` → Timescale `headlines`.
   - Includes backoff/jitter, counters, graceful cancel.
 - `app.py` (entrypoint: `python -m src.app`) — orchestrator: healthcheck DB/Kafka, start producer/consumer, run process_prices_task, manage state (price windows, last alert, latest headline).
-- `main.py` — thin wrapper kept for legacy usage (imports StreamProcessor). Preferred entrypoint is `python -m src.app`.
+- `main.py` — removed in favor of the single entrypoint `python -m src.app`.
 
 ## Data written to Timescale
 - `prices(time, symbol, price, PK (time, symbol))`

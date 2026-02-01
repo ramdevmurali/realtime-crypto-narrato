@@ -8,6 +8,7 @@ from .config import settings
 from .db import insert_headline
 from .utils import now_utc, simple_sentiment, sleep_backoff, with_retries
 from .logging_config import get_logger
+from .models.messages import PriceMsg, NewsMsg
 
 
 async def process_feed_entry(processor, entry, seen_ids: set[str]):
@@ -22,16 +23,10 @@ async def process_feed_entry(processor, entry, seen_ids: set[str]):
     url = entry.get('link')
     source = entry.get('source', {}).get('title') if entry.get('source') else "rss"
     sentiment = simple_sentiment(title)
-    payload = {
-        "time": ts.isoformat(),
-        "title": title,
-        "url": url,
-        "source": source,
-        "sentiment": sentiment,
-    }
+    msg = NewsMsg(time=ts, title=title, url=url, source=source, sentiment=sentiment)
     await with_retries(insert_headline, ts, title, source, url, sentiment, log=getattr(processor, "log", None), op="insert_headline")
     processor.latest_headline = (title, sentiment)
-    await with_retries(processor.producer.send_and_wait, settings.news_topic, json.dumps(payload).encode(), log=getattr(processor, "log", None), op="send_news")
+    await with_retries(processor.producer.send_and_wait, settings.news_topic, msg.to_bytes(), log=getattr(processor, "log", None), op="send_news")
     return True
 
 
@@ -55,8 +50,8 @@ async def price_ingest_task(processor):
                     symbol = payload.get("s", "").lower()
                     price = float(payload.get("c", 0))
                     ts = now_utc()
-                    body = {"symbol": symbol, "price": price, "time": ts.isoformat()}
-                    await with_retries(processor.producer.send_and_wait, settings.price_topic, json.dumps(body).encode(), log=log, op="send_price")
+                    msg = PriceMsg(symbol=symbol, price=price, time=ts)
+                    await with_retries(processor.producer.send_and_wait, settings.price_topic, msg.to_bytes(), log=log, op="send_price")
                     log.info("price_published", extra={"symbol": symbol, "price": price})
                     price_messages_sent += 1
                     if price_messages_sent % 500 == 0:

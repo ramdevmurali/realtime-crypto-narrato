@@ -12,6 +12,7 @@ import contextlib
 from .config import settings
 from .db import init_tables, insert_price, insert_metric, get_pool
 from .utils import now_utc, with_retries
+from .models.messages import PriceMsg
 from .windows import PriceWindow
 from .ingest import price_ingest_task, news_ingest_task
 from .metrics import compute_metrics
@@ -95,7 +96,8 @@ class StreamProcessor:
         async for msg in self.consumer:
             try:
                 data = json.loads(msg.value.decode())
-            except json.JSONDecodeError:
+                price_msg = PriceMsg.model_validate(data)
+            except (json.JSONDecodeError, Exception):
                 self.bad_price_messages += 1
                 if self.bad_price_messages == 1 or self.bad_price_messages % self.bad_price_log_every == 0:
                     self.log.warning(
@@ -109,9 +111,9 @@ class StreamProcessor:
                     with contextlib.suppress(Exception):
                         await self.producer.send_and_wait(settings.price_dlq_topic, msg.value)
                 continue
-            symbol = data.get('symbol')
-            price = float(data.get('price'))
-            ts = dateparser.parse(data.get('time')) if data.get('time') else now_utc()
+            symbol = price_msg.symbol
+            price = float(price_msg.price)
+            ts = price_msg.time
 
             await with_retries(insert_price, ts, symbol, price, log=self.log, op="insert_price")
             win = self.price_windows[symbol]

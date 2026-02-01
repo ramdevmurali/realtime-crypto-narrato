@@ -49,6 +49,13 @@ Canonical payload models live in `processor/src/models/messages.py`.
 Non-goals for now:
 - No schema registry (JSON/Avro) yet; models + tests enforce contracts.
 
+## Interfaces (module inputs/outputs)
+- `ingest.py`: inputs — Binance WS ticks + RSS feed; outputs — Kafka `prices`/`news`, Timescale `prices`/`headlines`, updates `processor.latest_headline`.
+- `metrics.py`: inputs — `PriceWindow` state per symbol; outputs — metrics dict (returns/vol/z/percentiles) for the current tick.
+- `anomaly.py`: inputs — symbol, timestamp, metrics; outputs — Timescale `anomalies`, Kafka `alerts`, Kafka `summaries` request.
+- `app.py`: orchestrator; owns Kafka producer/consumer, `price_windows`, `last_alert`, `latest_headline`, DLQ counters.
+- `summary_sidecar.py`: inputs — Kafka `summaries` requests; outputs — Timescale `anomalies` summary upsert, Kafka `alerts` enriched.
+
 ## How to run
 ```
 cd infra

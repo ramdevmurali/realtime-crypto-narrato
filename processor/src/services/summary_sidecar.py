@@ -7,7 +7,7 @@ from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 from src.config import settings
 from src.logging_config import get_logger
 from src.utils import llm_summarize, with_retries
-from src.models.messages import SummaryRequestMsg
+from src.models.messages import SummaryRequestMsg, AlertMsg
 
 
 log = get_logger(__name__)
@@ -109,8 +109,18 @@ async def handle_summary_message(raw_value: bytes, producer, pool, log):
     )
 
     # Republish enriched alert to alerts topic
-    enriched_alert = payload | {"summary": summary}
-    await producer.send_and_wait(settings.alerts_topic, json.dumps(enriched_alert).encode())
+    enriched_alert = AlertMsg(
+        time=payload["time"],
+        symbol=payload["symbol"],
+        window=payload["window"],
+        direction=payload["direction"],
+        ret=payload["ret"],
+        threshold=payload["threshold"],
+        headline=payload.get("headline"),
+        sentiment=payload.get("sentiment"),
+        summary=summary,
+    )
+    await producer.send_and_wait(settings.alerts_topic, enriched_alert.to_bytes())
     log.info("summary_enriched", extra={"symbol": payload["symbol"], "window": payload["window"]})
 
 

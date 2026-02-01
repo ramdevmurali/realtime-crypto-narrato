@@ -39,6 +39,16 @@
 - A future sidecar can consume `summaries`, call the configured LLM, and backfill richer summaries asynchronously.
   - Sidecar knobs: `SUMMARY_CONSUMER_GROUP`, `SUMMARY_POLL_TIMEOUT_MS`, `SUMMARY_BATCH_MAX` (optional) control consumption behavior.
 
+## Topic payloads (required fields)
+Canonical payload models live in `processor/src/models/messages.py`.
+- `prices`: `symbol`, `price`, `time`
+- `news`: `time`, `title`, `source`, `sentiment` (optional: `url`)
+- `summaries` (summary-request): `time`, `symbol`, `window`, `direction`, `ret`, `threshold` (optional: `headline`, `sentiment`)
+- `alerts`: `time`, `symbol`, `window`, `direction`, `ret`, `threshold`, `summary` (optional: `headline`, `sentiment`)
+
+Non-goals for now:
+- No schema registry (JSON/Avro) yet; models + tests enforce contracts.
+
 ## How to run
 ```
 cd infra

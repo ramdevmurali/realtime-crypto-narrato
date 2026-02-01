@@ -7,6 +7,7 @@ from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 from src.config import settings
 from src.logging_config import get_logger
 from src.utils import llm_summarize, with_retries
+from src.models.messages import SummaryRequestMsg
 
 
 log = get_logger(__name__)
@@ -63,7 +64,7 @@ async def main():
 
 
 async def handle_summary_message(raw_value: bytes, producer, pool, log):
-    payload = json.loads(raw_value.decode())
+    payload = SummaryRequestMsg.model_validate_json(raw_value).model_dump()
     log.info("summary_request_received", extra=payload)
 
     # Call LLM (with lightweight concurrency cap)

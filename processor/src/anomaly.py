@@ -38,7 +38,7 @@ async def check_anomalies(processor, symbol: str, ts, metrics):
         if abs(ret) >= threshold:
             key = (symbol, label)
             last_ts = processor.last_alert.get(key)
-            if last_ts and ts - last_ts < timedelta(seconds=60):
+            if last_ts and ts - last_ts < timedelta(seconds=settings.anomaly_cooldown_sec):
                 continue
             direction = "up" if ret >= 0 else "down"
             # Use the base/stub summary locally; offload richer LLM to summaries topic.

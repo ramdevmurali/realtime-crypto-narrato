@@ -75,18 +75,18 @@ async def price_ingest_task(processor):
                     await with_retries(processor.producer.send_and_wait, settings.price_topic, msg.to_bytes(), log=log, op="send_price")
                     log.info("price_published", extra={"symbol": symbol, "price": price})
                     price_messages_sent += 1
-                    if price_messages_sent % 500 == 0:
+                    if price_messages_sent % settings.price_publish_log_every == 0:
                         log.info("price_published_count", extra={"count": price_messages_sent})
         except asyncio.CancelledError:
             log.info("price_ingest_cancelled")
             break
         except Exception as exc:
             log.warning("price_ws_error", extra={"error": str(exc), "attempt": attempt, "failures": failures})
-            backoff_base = 2 if failures >= 5 else 1
-            await sleep_backoff(attempt, base=backoff_base, cap=60)
+            backoff_base = settings.price_backoff_base_after_failures_sec if failures >= settings.price_backoff_failures_threshold else settings.price_backoff_base_sec
+            await sleep_backoff(attempt, base=backoff_base, cap=settings.price_backoff_cap_sec)
             attempt += 1
             failures += 1
-            if failures % 5 == 0:
+            if failures % settings.price_failure_log_every == 0:
                 log.warning("price_failure_count", extra={"failures": failures})
 
 
@@ -106,22 +106,22 @@ async def news_ingest_task(processor):
             failures = 0
             seen_now = now_utc()
             _prune_seen(seen_cache, seen_order, seen_now)
-            for entry in feed.entries[:20]:
+            for entry in feed.entries[:settings.news_batch_limit]:
                 sent = await process_feed_entry(processor, entry, seen_cache, seen_order, seen_now)
                 if sent:
                     news_messages_sent += 1
-                    if news_messages_sent % 200 == 0:
+                    if news_messages_sent % settings.news_publish_log_every == 0:
                         log.info("news_published_count", extra={"count": news_messages_sent})
         except asyncio.CancelledError:
             log.info("news_ingest_cancelled")
             break
         except Exception as exc:
             log.warning("news_poll_error", extra={"error": str(exc), "attempt": attempt, "failures": failures})
-            backoff_base = 10 if failures >= 5 else 5
-            await sleep_backoff(attempt, base=backoff_base, cap=90)
+            backoff_base = settings.news_backoff_base_after_failures_sec if failures >= settings.news_backoff_failures_threshold else settings.news_backoff_base_sec
+            await sleep_backoff(attempt, base=backoff_base, cap=settings.news_backoff_cap_sec)
             attempt += 1
             failures += 1
-            if failures % 3 == 0:
+            if failures % settings.news_failure_log_every == 0:
                 log.warning("news_failure_count", extra={"failures": failures})
             continue
-        await asyncio.sleep(60)
+        await asyncio.sleep(settings.news_poll_interval_sec)

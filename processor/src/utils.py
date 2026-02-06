@@ -77,15 +77,21 @@ def llm_summarize(provider: str, api_key: Optional[str], symbol: str, window: st
     return base_summary
 
 
-async def sleep_backoff(attempt: int, base: float = 1.0, cap: float = 30.0):
+async def sleep_backoff(attempt: int, base: float | None = None, cap: float | None = None):
     """Exponential backoff with jitter, capped."""
+    if base is None:
+        base = settings.retry_backoff_base_sec
+    if cap is None:
+        cap = settings.retry_backoff_cap_sec
     wait = min(cap, base * (2 ** attempt))
     wait = wait * (0.5 + random.random())  # jitter 0.5x-1.5x
     await asyncio.sleep(wait)
 
 
-async def with_retries(fn, *args, max_attempts: int = 3, log=None, op: str | None = None, **kwargs):
+async def with_retries(fn, *args, max_attempts: int | None = None, log=None, op: str | None = None, **kwargs):
     """Run an async fn with bounded retries and backoff."""
+    if max_attempts is None:
+        max_attempts = settings.retry_max_attempts
     op_name = op or getattr(fn, "__name__", "operation")
     attempt = 0
     while True:

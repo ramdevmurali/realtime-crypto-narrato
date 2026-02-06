@@ -1,7 +1,7 @@
 import asyncio
 import json
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, Tuple
 
 from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
@@ -10,7 +10,7 @@ from dateutil import parser as dateparser
 
 import contextlib
 
-from .config import settings
+from .config import settings, get_thresholds, get_windows
 from .db import init_tables, insert_price, insert_metric, get_pool
 from .utils import now_utc, with_retries
 from .models.messages import PriceMsg
@@ -29,14 +29,44 @@ class StreamProcessor:
         self.last_alert: Dict[Tuple[str, str], datetime] = {}
         self.latest_headline: Tuple[str | None, float | None, datetime | None] = (None, None, None)
         self.bad_price_messages = 0
-        self.bad_price_log_every = 50
+        self.bad_price_log_every = settings.bad_price_log_every
         self.last_price_ts: Dict[str, datetime] = {}
         self.late_price_messages = 0
-        self.late_price_log_every = 50
+        self.late_price_log_every = settings.late_price_log_every
         self.log = get_logger(__name__)
 
     async def start(self):
         self.log.info("processor_starting", extra={"component": "processor"})
+        windows = get_windows()
+        self.log.info(
+            "processor_config",
+            extra={
+                "config": settings.safe_dict(),
+                "windows": {k: int(v.total_seconds()) for k, v in windows.items()},
+                "window_labels": list(windows.keys()),
+                "thresholds": get_thresholds(),
+                "topics": {
+                    "price_topic": settings.price_topic,
+                    "news_topic": settings.news_topic,
+                    "alerts_topic": settings.alerts_topic,
+                    "summaries_topic": settings.summaries_topic,
+                    "summaries_dlq_topic": settings.summaries_dlq_topic,
+                    "price_dlq_topic": settings.price_dlq_topic,
+                },
+                "policies": {
+                    "late_price_tolerance_sec": settings.late_price_tolerance_sec,
+                    "anomaly_cooldown_sec": settings.anomaly_cooldown_sec,
+                    "headline_max_age_sec": settings.headline_max_age_sec,
+                    "rss_seen_ttl_sec": settings.rss_seen_ttl_sec,
+                    "rss_seen_max": settings.rss_seen_max,
+                    "window_max_gap_factor": settings.window_max_gap_factor,
+                    "vol_resample_sec": settings.vol_resample_sec,
+                    "retry_max_attempts": settings.retry_max_attempts,
+                    "retry_backoff_base_sec": settings.retry_backoff_base_sec,
+                    "retry_backoff_cap_sec": settings.retry_backoff_cap_sec,
+                },
+            },
+        )
         await self.healthcheck()
         await init_tables()
         self.producer = AIOKafkaProducer(bootstrap_servers=settings.kafka_brokers)
@@ -118,7 +148,8 @@ class StreamProcessor:
             price = float(price_msg.price)
             ts = price_msg.time
             last_ts = self.last_price_ts.get(symbol)
-            if last_ts and ts < last_ts:
+            tolerance = timedelta(seconds=settings.late_price_tolerance_sec)
+            if last_ts and ts < last_ts - tolerance:
                 self.late_price_messages += 1
                 if self.late_price_messages == 1 or self.late_price_messages % self.late_price_log_every == 0:
                     self.log.warning(

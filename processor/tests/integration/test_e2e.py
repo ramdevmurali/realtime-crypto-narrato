@@ -8,6 +8,7 @@ from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 from aiokafka.structs import TopicPartition
 
 from processor.src import app as app_module
+from processor.src import price_pipeline as pipeline_module
 from processor.src.config import settings
 from processor.src.db import get_pool
 from processor.src.models.messages import PriceMsg
@@ -90,7 +91,7 @@ async def test_e2e_happy_path(integration_services, integration_settings):
 async def test_e2e_retry_path(integration_services, integration_settings, monkeypatch):
     group_id = f"processor-it-{uuid.uuid4().hex}"
     calls = {"count": 0}
-    real_insert = app_module.insert_price
+    real_insert = pipeline_module.insert_price
 
     async def flaky_insert(*args, **kwargs):
         calls["count"] += 1
@@ -98,7 +99,7 @@ async def test_e2e_retry_path(integration_services, integration_settings, monkey
             raise RuntimeError("transient db error")
         return await real_insert(*args, **kwargs)
 
-    monkeypatch.setattr(app_module, "insert_price", flaky_insert)
+    monkeypatch.setattr(pipeline_module, "insert_price", flaky_insert)
     proc, task = await _start_processor(group_id)
     try:
         now = now_utc()

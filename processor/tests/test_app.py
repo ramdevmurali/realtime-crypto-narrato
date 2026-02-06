@@ -2,6 +2,7 @@ import json
 import pytest
 
 from processor.src import app as app_module
+from processor.src import price_pipeline as pipeline_module
 
 
 class FakeConsumer:
@@ -19,7 +20,7 @@ class FakeConsumer:
         self._sent = True
         return self.msg
 
-    async def commit(self, offsets):
+    async def commit(self, offsets=None):
         self.commits.append(offsets)
 
 
@@ -36,7 +37,7 @@ class FakeConsumerSeq:
             raise StopAsyncIteration
         return self.msgs.pop(0)
 
-    async def commit(self, offsets):
+    async def commit(self, offsets=None):
         self.commits.append(offsets)
 
 
@@ -79,10 +80,10 @@ async def test_process_prices_task_skips_duplicate(monkeypatch):
     async def fake_check_anomalies(*args, **kwargs):
         raise AssertionError("check_anomalies called")
 
-    monkeypatch.setattr(app_module, "with_retries", no_retry)
-    monkeypatch.setattr(app_module, "insert_price", fake_insert_price)
-    monkeypatch.setattr(app_module, "insert_metric", fake_insert_metric)
-    monkeypatch.setattr(app_module, "check_anomalies", fake_check_anomalies)
+    monkeypatch.setattr(pipeline_module, "with_retries", no_retry)
+    monkeypatch.setattr(pipeline_module, "insert_price", fake_insert_price)
+    monkeypatch.setattr(pipeline_module, "insert_metric", fake_insert_metric)
+    monkeypatch.setattr(pipeline_module, "check_anomalies", fake_check_anomalies)
 
     await proc.process_prices_task()
 
@@ -117,10 +118,10 @@ async def test_process_prices_task_drops_late_message(monkeypatch):
     async def fake_check_anomalies(*args, **kwargs):
         raise AssertionError("check_anomalies called")
 
-    monkeypatch.setattr(app_module, "with_retries", no_retry)
-    monkeypatch.setattr(app_module, "insert_price", fake_insert_price)
-    monkeypatch.setattr(app_module, "insert_metric", fake_insert_metric)
-    monkeypatch.setattr(app_module, "check_anomalies", fake_check_anomalies)
+    monkeypatch.setattr(pipeline_module, "with_retries", no_retry)
+    monkeypatch.setattr(pipeline_module, "insert_price", fake_insert_price)
+    monkeypatch.setattr(pipeline_module, "insert_metric", fake_insert_metric)
+    monkeypatch.setattr(pipeline_module, "check_anomalies", fake_check_anomalies)
 
     await proc.process_prices_task()
 

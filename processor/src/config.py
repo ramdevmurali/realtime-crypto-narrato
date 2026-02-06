@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     return_percentile_low: float = 0.05
     return_percentile_high: float = 0.95  # percentiles for return bands
 
+    headline_max_age_sec: int = 900  # max age for attaching latest headline
+    rss_seen_ttl_sec: int = 86400  # dedupe TTL for RSS IDs
+    rss_seen_max: int = 5000  # max cached RSS IDs
+
     llm_provider: str = "stub"  # stub|openai|google
     openai_api_key: str | None = None
     google_api_key: str | None = None
@@ -39,6 +43,7 @@ class Settings(BaseSettings):
     news_topic: str = "news"
     alerts_topic: str = "alerts"
     summaries_topic: str = "summaries"
+    summaries_dlq_topic: str = "summaries-deadletter"
     price_dlq_topic: str = "prices-deadletter"
     summary_consumer_group: str = "summary-sidecar"
     summary_poll_timeout_ms: int = 500

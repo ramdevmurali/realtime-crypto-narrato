@@ -108,19 +108,21 @@ async def init_tables():
         raise
 
 
-async def insert_price(time, symbol, price):
+async def insert_price(time, symbol, price) -> bool:
     pool = await get_pool()
     async with pool.acquire() as conn:
-        await conn.execute(
+        row = await conn.fetchval(
             """
             INSERT INTO prices(time, symbol, price)
             VALUES ($1, $2, $3)
             ON CONFLICT (time, symbol) DO NOTHING
+            RETURNING 1
             """,
             time,
             symbol,
             price,
         )
+        return row is not None
 
 
 async def insert_metric(time, symbol, metrics: Dict[str, Any]):
@@ -143,6 +145,32 @@ async def insert_metric(time, symbol, metrics: Dict[str, Any]):
             VALUES(
                 $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27
             )
+            ON CONFLICT (time, symbol) DO UPDATE SET
+                return_1m = EXCLUDED.return_1m,
+                return_5m = EXCLUDED.return_5m,
+                return_15m = EXCLUDED.return_15m,
+                vol_1m = EXCLUDED.vol_1m,
+                vol_5m = EXCLUDED.vol_5m,
+                vol_15m = EXCLUDED.vol_15m,
+                return_z_1m = EXCLUDED.return_z_1m,
+                return_z_5m = EXCLUDED.return_z_5m,
+                return_z_15m = EXCLUDED.return_z_15m,
+                return_z_ewma_1m = EXCLUDED.return_z_ewma_1m,
+                return_z_ewma_5m = EXCLUDED.return_z_ewma_5m,
+                return_z_ewma_15m = EXCLUDED.return_z_ewma_15m,
+                vol_z_1m = EXCLUDED.vol_z_1m,
+                vol_z_5m = EXCLUDED.vol_z_5m,
+                vol_z_15m = EXCLUDED.vol_z_15m,
+                vol_spike_1m = EXCLUDED.vol_spike_1m,
+                vol_spike_5m = EXCLUDED.vol_spike_5m,
+                vol_spike_15m = EXCLUDED.vol_spike_15m,
+                p05_return_1m = EXCLUDED.p05_return_1m,
+                p05_return_5m = EXCLUDED.p05_return_5m,
+                p05_return_15m = EXCLUDED.p05_return_15m,
+                p95_return_1m = EXCLUDED.p95_return_1m,
+                p95_return_5m = EXCLUDED.p95_return_5m,
+                p95_return_15m = EXCLUDED.p95_return_15m,
+                attention = EXCLUDED.attention
             """,
             time,
             symbol,

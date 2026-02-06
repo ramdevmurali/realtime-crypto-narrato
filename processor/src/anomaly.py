@@ -15,7 +15,21 @@ async def check_anomalies(processor, symbol: str, ts, metrics):
     log = getattr(processor, "log", get_logger(__name__))
     if not hasattr(processor, "alerts_emitted"):
         processor.alerts_emitted = 0
-    headline, sentiment = processor.latest_headline
+    headline = None
+    sentiment = None
+    headline_ts = None
+    if hasattr(processor, "latest_headline"):
+        latest = processor.latest_headline
+        if isinstance(latest, tuple):
+            if len(latest) >= 1:
+                headline = latest[0]
+            if len(latest) >= 2:
+                sentiment = latest[1]
+            if len(latest) >= 3:
+                headline_ts = latest[2]
+    if headline_ts is None or ts - headline_ts > timedelta(seconds=settings.headline_max_age_sec):
+        headline = None
+        sentiment = None
     thresholds = get_thresholds()
     for label, threshold in thresholds.items():
         ret = metrics.get(f"return_{label}") if metrics else None

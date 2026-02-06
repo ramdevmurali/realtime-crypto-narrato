@@ -86,12 +86,8 @@ async def test_handle_summary_message_llm_failure(monkeypatch):
         "sentiment": 0.1,
     }
 
-    # Should swallow error and not crash
-    await summary_sidecar.handle_summary_message(json.dumps(payload).encode(), producer, pool, log)
-
-    # No DB writes, no publishes
-    assert pool.calls == []
-    assert producer.sent == []
+    with pytest.raises(RuntimeError):
+        await summary_sidecar.handle_summary_message(json.dumps(payload).encode(), producer, pool, log)
 
 
 @pytest.mark.asyncio
@@ -126,3 +122,52 @@ async def test_handle_summary_message_batch(monkeypatch):
     assert len(producer.sent) == 2
     symbols = {params[1] for _, params in pool.calls}
     assert symbols == {"btcusdt", "ethusdt"}
+
+
+@pytest.mark.asyncio
+async def test_process_summary_record_sends_dlq_on_failure(monkeypatch):
+    class FakeConsumer:
+        def __init__(self):
+            self.commits = []
+
+        async def commit(self, offsets):
+            self.commits.append(offsets)
+
+    class FakeMsg:
+        topic = "summaries"
+        partition = 0
+        offset = 10
+        value = json.dumps({
+            "time": "2026-01-27T12:00:00+00:00",
+            "symbol": "btcusdt",
+            "window": "1m",
+            "direction": "up",
+            "ret": 0.07,
+            "threshold": 0.05,
+            "headline": "headline",
+            "sentiment": 0.1,
+        }).encode()
+
+    async def fail_handle(*args, **kwargs):
+        raise RuntimeError("fail")
+
+    async def no_retry(fn, *args, **kwargs):
+        kwargs.pop("log", None)
+        kwargs.pop("op", None)
+        kwargs.pop("max_attempts", None)
+        return await fn(*args, **kwargs)
+
+    monkeypatch.setattr(summary_sidecar, "handle_summary_message", fail_handle)
+    monkeypatch.setattr(summary_sidecar, "with_retries", no_retry)
+
+    consumer = FakeConsumer()
+    producer = FakeProducer()
+    pool = FakePool()
+    log = summary_sidecar.get_logger(__name__)
+
+    ok = await summary_sidecar.process_summary_record(FakeMsg(), consumer, producer, pool, log)
+    assert ok is False
+    assert len(producer.sent) == 1
+    topic, _ = producer.sent[0]
+    assert topic == settings.summaries_dlq_topic
+    assert len(consumer.commits) == 1

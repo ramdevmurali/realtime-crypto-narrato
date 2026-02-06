@@ -20,7 +20,7 @@ class FakeProcessor:
     def __init__(self):
         self.producer = FakeProducer()
         self.last_alert = {}
-        self.latest_headline = ("headline", 0.1)
+        self.latest_headline = (None, None, None)
 
 
 @pytest.mark.asyncio
@@ -128,8 +128,8 @@ async def test_check_anomalies_includes_latest_headline_and_sentiment(monkeypatc
     monkeypatch.setattr(anomaly, "insert_anomaly", fake_insert_anomaly)
 
     proc = FakeProcessor()
-    proc.latest_headline = ("Breaking news", -0.3)
     ts = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+    proc.latest_headline = ("Breaking news", -0.3, ts - timedelta(minutes=5))
     metrics = {"return_1m": settings.alert_threshold_1m + 0.02}
 
     await anomaly.check_anomalies(proc, "btc", ts, metrics)
@@ -138,6 +138,27 @@ async def test_check_anomalies_includes_latest_headline_and_sentiment(monkeypatc
     payload_str = proc.producer.sent[1][1].decode()
     assert "Breaking news" in payload_str
     assert "-0.3" in payload_str
+
+
+@pytest.mark.asyncio
+async def test_check_anomalies_omits_stale_headline(monkeypatch):
+    calls = []
+
+    async def fake_insert_anomaly(*args, **kwargs):
+        calls.append(args)
+
+    monkeypatch.setattr(anomaly, "insert_anomaly", fake_insert_anomaly)
+
+    proc = FakeProcessor()
+    ts = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+    proc.latest_headline = ("Old news", 0.2, ts - timedelta(minutes=30))
+    metrics = {"return_1m": settings.alert_threshold_1m + 0.02}
+
+    await anomaly.check_anomalies(proc, "btc", ts, metrics)
+
+    payload = json.loads(proc.producer.sent[1][1].decode())
+    assert payload["headline"] is None
+    assert payload["sentiment"] is None
 
 
 @pytest.mark.asyncio

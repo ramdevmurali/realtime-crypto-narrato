@@ -1,5 +1,7 @@
 import asyncio
 import json
+from collections import deque
+from datetime import datetime, timedelta
 import feedparser
 import websockets
 from dateutil import parser as dateparser
@@ -11,11 +13,30 @@ from .logging_config import get_logger
 from .models.messages import PriceMsg, NewsMsg
 
 
-async def process_feed_entry(processor, entry, seen_ids: set[str]):
+def _prune_seen(seen_cache: dict[str, datetime], seen_order: deque[str], now_ts):
+    cutoff = now_ts - timedelta(seconds=settings.rss_seen_ttl_sec)
+    while seen_order:
+        oldest = seen_order[0]
+        seen_ts = seen_cache.get(oldest)
+        if seen_ts is None or seen_ts < cutoff:
+            seen_order.popleft()
+            seen_cache.pop(oldest, None)
+            continue
+        break
+    while len(seen_order) > settings.rss_seen_max:
+        oldest = seen_order.popleft()
+        seen_cache.pop(oldest, None)
+
+
+async def process_feed_entry(processor, entry, seen_cache: dict[str, datetime], seen_order: deque[str], seen_now):
     uid = entry.get('id') or entry.get('link') or entry.get('title')
-    if uid in seen_ids:
+    if uid in seen_cache:
         return False
-    seen_ids.add(uid)
+    seen_cache[uid] = seen_now
+    seen_order.append(uid)
+    if len(seen_order) > settings.rss_seen_max:
+        oldest = seen_order.popleft()
+        seen_cache.pop(oldest, None)
 
     published = entry.get('published') or entry.get('updated')
     ts = dateparser.parse(published) if published else now_utc()
@@ -25,7 +46,7 @@ async def process_feed_entry(processor, entry, seen_ids: set[str]):
     sentiment = simple_sentiment(title)
     msg = NewsMsg(time=ts, title=title, url=url, source=source, sentiment=sentiment)
     await with_retries(insert_headline, ts, title, source, url, sentiment, log=getattr(processor, "log", None), op="insert_headline")
-    processor.latest_headline = (title, sentiment)
+    processor.latest_headline = (title, sentiment, ts)
     await with_retries(processor.producer.send_and_wait, settings.news_topic, msg.to_bytes(), log=getattr(processor, "log", None), op="send_news")
     return True
 
@@ -73,17 +94,20 @@ async def news_ingest_task(processor):
     """Poll RSS feed, sentiment tag, and publish headlines."""
     assert processor.producer
     log = getattr(processor, "log", get_logger(__name__))
-    seen_ids: set[str] = set()
+    seen_cache: dict[str, datetime] = {}
+    seen_order: deque[str] = deque()
     attempt = 0
     failures = 0
     news_messages_sent = 0
     while True:
         try:
-            feed = feedparser.parse(settings.news_rss)
+            feed = await asyncio.to_thread(feedparser.parse, settings.news_rss)
             attempt = 0
             failures = 0
+            seen_now = now_utc()
+            _prune_seen(seen_cache, seen_order, seen_now)
             for entry in feed.entries[:20]:
-                sent = await process_feed_entry(processor, entry, seen_ids)
+                sent = await process_feed_entry(processor, entry, seen_cache, seen_order, seen_now)
                 if sent:
                     news_messages_sent += 1
                     if news_messages_sent % 200 == 0:

@@ -3,6 +3,7 @@ import json
 import signal
 import asyncpg
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
+from aiokafka.structs import TopicPartition, OffsetAndMetadata
 
 from src.config import settings
 from src.logging_config import get_logger
@@ -29,7 +30,7 @@ async def main():
         settings.summaries_topic,
         bootstrap_servers=settings.kafka_brokers,
         loop=loop,
-        enable_auto_commit=True,
+        enable_auto_commit=False,
         auto_offset_reset="latest",
         group_id=settings.summary_consumer_group,
     )
@@ -46,15 +47,7 @@ async def main():
             )
             for tp, messages in msg_batch.items():
                 for msg in messages:
-                    await with_retries(
-                        handle_summary_message,
-                        msg.value,
-                        producer,
-                        pool,
-                        log,
-                        log=log,
-                        op="handle_summary_message",
-                    )
+                    await process_summary_record(msg, consumer, producer, pool, log)
             await asyncio.sleep(0)  # yield control
     finally:
         await consumer.stop()
@@ -68,15 +61,16 @@ async def handle_summary_message(raw_value: bytes, producer, pool, log):
     log.info("summary_request_received", extra=payload)
 
     # Call LLM (with lightweight concurrency cap)
-    try:
-        async with _llm_semaphore:
-            api_key = None
-            if settings.llm_provider == "openai":
-                api_key = settings.openai_api_key
-            elif settings.llm_provider == "google":
-                api_key = settings.google_api_key
+    async with _llm_semaphore:
+        api_key = None
+        if settings.llm_provider == "openai":
+            api_key = settings.openai_api_key
+        elif settings.llm_provider == "google":
+            api_key = settings.google_api_key
 
-            summary = llm_summarize(
+        try:
+            summary = await asyncio.to_thread(
+                llm_summarize,
                 settings.llm_provider,
                 api_key,
                 payload["symbol"],
@@ -85,9 +79,12 @@ async def handle_summary_message(raw_value: bytes, producer, pool, log):
                 payload.get("headline"),
                 payload.get("sentiment"),
             )
-    except Exception as exc:  # LLM failure: log and skip
-        log.exception("summary_llm_error", extra={"error": str(exc), "symbol": payload.get("symbol"), "window": payload.get("window")})
-        return
+        except Exception as exc:
+            log.exception(
+                "summary_llm_error",
+                extra={"error": str(exc), "symbol": payload.get("symbol"), "window": payload.get("window")},
+            )
+            raise
 
     # Upsert anomalies table with enriched summary
     await pool.execute(
@@ -122,6 +119,43 @@ async def handle_summary_message(raw_value: bytes, producer, pool, log):
     )
     await producer.send_and_wait(settings.alerts_topic, enriched_alert.to_bytes())
     log.info("summary_enriched", extra={"symbol": payload["symbol"], "window": payload["window"]})
+
+
+async def _commit_message(consumer, msg, log):
+    tp = TopicPartition(msg.topic, msg.partition)
+    try:
+        await consumer.commit({tp: OffsetAndMetadata(msg.offset + 1, None)})
+    except Exception as exc:
+        log.warning("summary_commit_failed", extra={"error": str(exc), "offset": msg.offset})
+
+
+async def process_summary_record(msg, consumer, producer, pool, log):
+    try:
+        await with_retries(
+            handle_summary_message,
+            msg.value,
+            producer,
+            pool,
+            log,
+            log=log,
+            op="handle_summary_message",
+        )
+        await _commit_message(consumer, msg, log)
+        return True
+    except Exception as exc:
+        log.warning("summary_handle_failed", extra={"error": str(exc)})
+        try:
+            await with_retries(
+                producer.send_and_wait,
+                settings.summaries_dlq_topic,
+                msg.value,
+                log=log,
+                op="send_summary_dlq",
+            )
+        except Exception as dlq_exc:
+            log.error("summary_dlq_failed", extra={"error": str(dlq_exc)})
+        await _commit_message(consumer, msg, log)
+        return False
 
 
 if __name__ == "__main__":

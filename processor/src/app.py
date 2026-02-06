@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Dict, Tuple
 
 from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
+from aiokafka.structs import TopicPartition, OffsetAndMetadata
 from dateutil import parser as dateparser
 
 import contextlib
@@ -26,7 +27,7 @@ class StreamProcessor:
         self.consumer: AIOKafkaConsumer | None = None
         self.price_windows: Dict[str, PriceWindow] = defaultdict(PriceWindow)
         self.last_alert: Dict[Tuple[str, str], datetime] = {}
-        self.latest_headline: Tuple[str | None, float | None] = (None, None)
+        self.latest_headline: Tuple[str | None, float | None, datetime | None] = (None, None, None)
         self.bad_price_messages = 0
         self.bad_price_log_every = 50
         self.log = get_logger(__name__)
@@ -41,7 +42,7 @@ class StreamProcessor:
             settings.price_topic,
             bootstrap_servers=settings.kafka_brokers,
             group_id="processor",
-            enable_auto_commit=True,
+            enable_auto_commit=False,
             auto_offset_reset="latest",
         )
         await self.consumer.start()
@@ -107,21 +108,55 @@ class StreamProcessor:
                             "bad_price_messages": self.bad_price_messages,
                         },
                     )
-                if self.producer:
-                    with contextlib.suppress(Exception):
-                        await self.producer.send_and_wait(settings.price_dlq_topic, msg.value)
+                await self._send_price_dlq(msg.value)
+                await self._commit_msg(msg)
                 continue
             symbol = price_msg.symbol
             price = float(price_msg.price)
             ts = price_msg.time
 
-            await with_retries(insert_price, ts, symbol, price, log=self.log, op="insert_price")
-            win = self.price_windows[symbol]
-            win.add(ts, price)
-            metrics = compute_metrics(self.price_windows, symbol, ts)
-            if metrics:
-                await with_retries(insert_metric, ts, symbol, metrics, log=self.log, op="insert_metric")
-            await check_anomalies(self, symbol, ts, metrics or {})
+            try:
+                inserted = await with_retries(insert_price, ts, symbol, price, log=self.log, op="insert_price")
+            except Exception as exc:
+                self.log.error("price_insert_failed", extra={"error": str(exc), "symbol": symbol})
+                await self._send_price_dlq(msg.value)
+                await self._commit_msg(msg)
+                continue
+
+            if inserted:
+                win = self.price_windows[symbol]
+                win.add(ts, price)
+                metrics = compute_metrics(self.price_windows, symbol, ts)
+                if metrics:
+                    try:
+                        await with_retries(insert_metric, ts, symbol, metrics, log=self.log, op="insert_metric")
+                    except Exception as exc:
+                        self.log.error("metric_insert_failed", extra={"error": str(exc), "symbol": symbol})
+                        await self._send_price_dlq(msg.value)
+                        await self._commit_msg(msg)
+                        continue
+                try:
+                    await check_anomalies(self, symbol, ts, metrics or {})
+                except Exception as exc:
+                    self.log.error("anomaly_check_failed", extra={"error": str(exc), "symbol": symbol})
+                    await self._send_price_dlq(msg.value)
+                    await self._commit_msg(msg)
+                    continue
+
+            await self._commit_msg(msg)
+
+    async def _commit_msg(self, msg):
+        tp = TopicPartition(msg.topic, msg.partition)
+        try:
+            await self.consumer.commit({tp: OffsetAndMetadata(msg.offset + 1, None)})
+        except Exception as exc:
+            self.log.warning("price_commit_failed", extra={"error": str(exc), "offset": msg.offset})
+
+    async def _send_price_dlq(self, payload: bytes):
+        if not self.producer:
+            return
+        with contextlib.suppress(Exception):
+            await self.producer.send_and_wait(settings.price_dlq_topic, payload)
 
 
 async def main():

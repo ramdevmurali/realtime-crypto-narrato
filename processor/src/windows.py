@@ -4,10 +4,24 @@ from typing import Deque, Tuple
 
 
 class PriceWindow:
-    def __init__(self):
+    def __init__(self, history_maxlen: int = 300):
         self.buffer: Deque[Tuple[datetime, float]] = deque()
         # per-window smoothed z-score state
         self.z_ewma = {}
+        self.history_maxlen = history_maxlen
+        self.return_history: dict[str, Deque[float]] = {}
+        self.vol_history: dict[str, Deque[float]] = {}
+
+    def _history_deque(self, store: dict[str, Deque[float]], label: str) -> Deque[float]:
+        if label not in store:
+            store[label] = deque(maxlen=self.history_maxlen)
+        return store[label]
+
+    def record_history(self, label: str, ret: float | None, vol: float | None):
+        if ret is not None:
+            self._history_deque(self.return_history, label).append(ret)
+        if vol is not None:
+            self._history_deque(self.vol_history, label).append(vol)
 
     def add(self, ts: datetime, price: float):
         self.buffer.append((ts, price))

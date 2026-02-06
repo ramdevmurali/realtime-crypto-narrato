@@ -97,30 +97,32 @@ def test_compute_metrics_propagates_returns_and_vol():
 def test_compute_metrics_return_z_scores():
     pw = PriceWindow()
     now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
-    # Prices within 5m: 100 -> 110 -> 90 -> 105
-    data = [
-        (now - timedelta(minutes=5), 100.0),
-        (now - timedelta(minutes=4), 110.0),
-        (now - timedelta(minutes=3), 90.0),
-        (now, 105.0),
-    ]
-    for ts, p in data:
-        pw.add(ts, p)
-
+    # Build a sequence so we get multiple 5m window returns in history.
+    prices = [100.0, 102.0, 104.0, 106.0, 108.0, 110.0, 112.0, 114.0]
+    times = [now - timedelta(minutes=7) + timedelta(minutes=i) for i in range(len(prices))]
     price_windows = {"ethusdt": pw}
-    metrics = compute_metrics(price_windows, "ethusdt", now)
-    assert metrics is not None
+    m1 = m2 = m3 = None
+    for ts, p in zip(times, prices):
+        pw.add(ts, p)
+        if ts == times[5]:
+            m1 = compute_metrics(price_windows, "ethusdt", ts)
+        if ts == times[6]:
+            m2 = compute_metrics(price_windows, "ethusdt", ts)
+        if ts == times[7]:
+            m3 = compute_metrics(price_windows, "ethusdt", ts)
+    assert m1 is not None
+    assert m2 is not None
+    assert m3 is not None
 
-    # return_5m uses oldest vs latest: (105-100)/100 = 0.05
-    assert pytest.approx(metrics["return_5m"], rel=1e-6) == 0.05
-
-    # returns series inside window: [0.10, -0.181818, 0.1666667]
-    returns = [0.10, -0.1818181818, 0.1666666667]
-    mean = sum(returns) / len(returns)
-    var = sum((r - mean) ** 2 for r in returns) / len(returns)
+    ret1 = (prices[5] - prices[0]) / prices[0]
+    ret2 = (prices[6] - prices[1]) / prices[1]
+    ret3 = (prices[7] - prices[2]) / prices[2]
+    hist = [ret1, ret2]
+    mean = sum(hist) / len(hist)
+    var = sum((r - mean) ** 2 for r in hist) / len(hist)
     std = var ** 0.5
-    expected_z = (0.05 - mean) / std
-    assert pytest.approx(metrics["return_z_5m"], rel=1e-6) == expected_z
+    expected_z = (ret3 - mean) / std
+    assert pytest.approx(m3["return_z_5m"], rel=1e-6) == expected_z
 
 
 def test_compute_metrics_return_z_score_insufficient_data():
@@ -136,28 +138,47 @@ def test_compute_metrics_return_z_score_insufficient_data():
 def test_vol_z_and_spike(monkeypatch):
     pw = PriceWindow()
     now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
-    data = [
-        (now - timedelta(minutes=5), 100.0),
-        (now - timedelta(minutes=4), 110.0),
-        (now - timedelta(minutes=3), 90.0),
-        (now, 105.0),
-    ]
-    for ts, p in data:
-        pw.add(ts, p)
+    prices = [100.0, 102.0, 104.0, 106.0, 108.0, 110.0, 112.0, 114.0]
+    times = [now - timedelta(minutes=7) + timedelta(minutes=i) for i in range(len(prices))]
 
-    # returns series: 0.10, -0.181818..., 0.166666...
-    returns = [0.10, -0.1818181818, 0.1666666667]
-    mean = sum(returns) / len(returns)
-    var = sum((r - mean) ** 2 for r in returns) / len(returns)
-    vol = var ** 0.5
-    vol_z_expected = (vol - mean) / (var ** 0.5)  # zscore(vol, returns)
+    def window_vol(start_index: int, end_index: int):
+        window_prices = prices[start_index:end_index + 1]
+        returns = []
+        for i in range(1, len(window_prices)):
+            prev = window_prices[i - 1]
+            cur = window_prices[i]
+            returns.append((cur - prev) / prev)
+        mean = sum(returns) / len(returns)
+        var = sum((r - mean) ** 2 for r in returns) / len(returns)
+        return var ** 0.5
 
-    monkeypatch.setattr(config_module.settings, "vol_z_spike_threshold", 0.5)
+    vol1 = window_vol(0, 5)
+    vol2 = window_vol(1, 6)
+    vol3 = window_vol(2, 7)
+    hist = [vol1, vol2]
+    mean = sum(hist) / len(hist)
+    var = sum((v - mean) ** 2 for v in hist) / len(hist)
+    std = var ** 0.5
+    vol_z_expected = (vol3 - mean) / std
+
+    monkeypatch.setattr(config_module.settings, "vol_z_spike_threshold", vol_z_expected - 0.1)
+
     price_windows = {"ethusdt": pw}
-    metrics = compute_metrics(price_windows, "ethusdt", now)
-    assert metrics is not None
-    assert pytest.approx(metrics["vol_z_5m"], rel=1e-6) == vol_z_expected
-    assert metrics["vol_spike_5m"] is True
+    m1 = m2 = m3 = None
+    for ts, p in zip(times, prices):
+        pw.add(ts, p)
+        if ts == times[5]:
+            m1 = compute_metrics(price_windows, "ethusdt", ts)
+        if ts == times[6]:
+            m2 = compute_metrics(price_windows, "ethusdt", ts)
+        if ts == times[7]:
+            m3 = compute_metrics(price_windows, "ethusdt", ts)
+    # Build history with two vols, then compute z for third.
+    assert m1 is not None
+    assert m2 is not None
+    assert m3 is not None
+    assert pytest.approx(m3["vol_z_5m"], rel=1e-6) == vol_z_expected
+    assert m3["vol_spike_5m"] is True
 
 
 def test_vol_z_none_with_insufficient_data():
@@ -176,36 +197,36 @@ def test_vol_z_none_with_insufficient_data():
 def test_return_percentiles_happy_path(monkeypatch):
     pw = PriceWindow()
     now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
-    prices = [100, 110, 90, 120, 150]  # returns series will vary
-    times = [
-        now - timedelta(minutes=4),
-        now - timedelta(minutes=3),
-        now - timedelta(minutes=2),
-        now - timedelta(minutes=1),
-        now,
-    ]
-    for ts, p in zip(times, prices):
-        pw.add(ts, p)
+    prices = [100, 105, 110, 120, 130, 125, 135, 140, 150]
+    times = [now - timedelta(minutes=8) + timedelta(minutes=i) for i in range(len(prices))]
 
     # override percentiles to 0.25 and 0.75 for deterministic check
     monkeypatch.setattr(config_module.settings, "return_percentile_low", 0.25)
     monkeypatch.setattr(config_module.settings, "return_percentile_high", 0.75)
 
     price_windows = {"btcusdt": pw}
-    metrics = compute_metrics(price_windows, "btcusdt", now)
+    metrics = None
+    for ts, p in zip(times, prices):
+        pw.add(ts, p)
+        if ts in {times[5], times[6], times[7], times[8]}:
+            metrics = compute_metrics(price_windows, "btcusdt", ts)
+
+    # last metrics call at times[8] should use three prior 5m returns in history
     assert metrics is not None
-    # build expected from returns series
-    returns = []
-    for i in range(1, len(prices)):
-        returns.append((prices[i] - prices[i - 1]) / prices[i - 1])
-    returns_sorted = sorted(returns)
+
+    ret1 = (prices[5] - prices[0]) / prices[0]
+    ret2 = (prices[6] - prices[1]) / prices[1]
+    ret3 = (prices[7] - prices[2]) / prices[2]
+    hist = sorted([ret1, ret2, ret3])
+
     def interp(p):
-        k = (len(returns_sorted) - 1) * p
+        k = (len(hist) - 1) * p
         f = int(k)
         c = math.ceil(k)
         if f == c:
-            return returns_sorted[f]
-        return returns_sorted[f] * (c - k) + returns_sorted[c] * (k - f)
+            return hist[f]
+        return hist[f] * (c - k) + hist[c] * (k - f)
+
     assert pytest.approx(metrics["p05_return_5m"], rel=1e-6) == interp(0.25)
     assert pytest.approx(metrics["p95_return_5m"], rel=1e-6) == interp(0.75)
 

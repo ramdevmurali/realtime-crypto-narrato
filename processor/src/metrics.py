@@ -69,24 +69,26 @@ def compute_metrics(price_windows, symbol: str, ts):
         metrics[f"return_{label}"] = ret
         vol = win.get_vol(ts, delta)
         metrics[f"vol_{label}"] = vol
-        rets_series = _returns_for_window(win, ts, delta)
-        metrics[f"return_z_{label}"] = _zscore(ret, rets_series)
+        ret_hist = list(win.return_history.get(label, []))
+        vol_hist = list(win.vol_history.get(label, []))
+        metrics[f"return_z_{label}"] = _zscore(ret, ret_hist)
         # smoothed z per window
         raw_z = metrics[f"return_z_{label}"]
         smoothed = _ewma(win.z_ewma.get(label), raw_z, settings.ewma_return_alpha)
         win.z_ewma[label] = smoothed
         metrics[f"return_z_ewma_{label}"] = smoothed
-        metrics[f"vol_z_{label}"] = _zscore(vol, rets_series)
+        metrics[f"vol_z_{label}"] = _zscore(vol, vol_hist)
         thr_spike = settings.vol_z_spike_threshold
         vz = metrics[f"vol_z_{label}"]
         metrics[f"vol_spike_{label}"] = vz is not None and vz > thr_spike
         # percentiles on returns
-        if len(rets_series) >= 3:
-            metrics[f"p05_return_{label}"] = _percentile(rets_series, settings.return_percentile_low)
-            metrics[f"p95_return_{label}"] = _percentile(rets_series, settings.return_percentile_high)
+        if len(ret_hist) >= 3:
+            metrics[f"p05_return_{label}"] = _percentile(ret_hist, settings.return_percentile_low)
+            metrics[f"p95_return_{label}"] = _percentile(ret_hist, settings.return_percentile_high)
         else:
             metrics[f"p05_return_{label}"] = None
             metrics[f"p95_return_{label}"] = None
+        win.record_history(label, ret, vol)
 
     ratios = []
     thr = get_thresholds()

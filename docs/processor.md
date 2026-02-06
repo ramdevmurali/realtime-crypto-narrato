@@ -63,5 +63,10 @@ docker compose up -d redpanda timescaledb processor summary-sidecar backend   # 
 ```
 Local/tests PYTHONPATH: `PYTHONPATH=processor/src:.`
 
+SSE stream for headlines (rudimentary sentiment):
+```
+curl -N 'http://localhost:8000/headlines/stream?limit=5&interval=2'
+```
+
 ## Tests (processor)
 - Unit coverage for PriceWindow (prune/returns/vol), metrics propagation, anomaly triggers/rate limit/direction, ingest dedupe/news processing.

@@ -194,5 +194,6 @@ def get_windows():
     labels = _csv(settings.window_labels_raw, ["1m", "5m", "15m"])
     windows = {}
     for label in labels:
-        windows[label] = _parse_window_label(label)
+        key = label.strip().lower()
+        windows[key] = _parse_window_label(key)
     return windows

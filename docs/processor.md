@@ -78,3 +78,13 @@ curl -N 'http://localhost:8000/headlines/stream?limit=5&interval=2'
 - Returns/vol are **strict-window**: prices outside the window are not used.
 - Gap handling is controlled by `WINDOW_MAX_GAP_FACTOR` but is clamped to the
   window size to prevent older spillover.
+
+## Runtime Policies
+- Late message tolerance: `LATE_PRICE_TOLERANCE_SEC` (drop if older than last seen minus tolerance).
+- Anomaly cooldown: `ANOMALY_COOLDOWN_SEC` (per symbol+window).
+- Log cadence: `BAD_PRICE_LOG_EVERY`, `LATE_PRICE_LOG_EVERY`,
+  `PRICE_PUBLISH_LOG_EVERY`, `NEWS_PUBLISH_LOG_EVERY`.
+- Backoff tuning:
+  `PRICE_BACKOFF_*`, `NEWS_BACKOFF_*`, `RETRY_MAX_ATTEMPTS`,
+  `RETRY_BACKOFF_BASE_SEC`, `RETRY_BACKOFF_CAP_SEC`.
+- RSS dedupe: `RSS_SEEN_TTL_SEC`, `RSS_SEEN_MAX`.

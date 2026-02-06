@@ -1,11 +1,14 @@
+from bisect import bisect_left, bisect_right
 from collections import deque
 from datetime import datetime, timedelta
-from typing import Deque, Tuple
+from typing import Deque, Tuple, List
+
+from .config import settings
 
 
 class PriceWindow:
     def __init__(self, history_maxlen: int = 300):
-        self.buffer: Deque[Tuple[datetime, float]] = deque()
+        self.buffer: List[Tuple[datetime, float]] = []
         # per-window smoothed z-score state
         self.z_ewma = {}
         self.history_maxlen = history_maxlen
@@ -24,35 +27,66 @@ class PriceWindow:
             self._history_deque(self.vol_history, label).append(vol)
 
     def add(self, ts: datetime, price: float):
-        self.buffer.append((ts, price))
+        if not self.buffer or ts >= self.buffer[-1][0]:
+            self.buffer.append((ts, price))
+        else:
+            times = [t for t, _ in self.buffer]
+            idx = bisect_left(times, ts)
+            if idx < len(self.buffer) and self.buffer[idx][0] == ts:
+                self.buffer[idx] = (ts, price)
+            else:
+                self.buffer.insert(idx, (ts, price))
         # drop anything older than 15m + small buffer
+        self._prune(ts)
+
+    def _prune(self, ts: datetime):
         cutoff = ts - timedelta(minutes=16)
-        while self.buffer and self.buffer[0][0] < cutoff:
-            self.buffer.popleft()
+        idx = 0
+        while idx < len(self.buffer) and self.buffer[idx][0] < cutoff:
+            idx += 1
+        if idx:
+            self.buffer = self.buffer[idx:]
 
     def _oldest_for_window(self, ts: datetime, window: timedelta):
         cutoff = ts - window
-        candidate = None
-        for t, p in self.buffer:
-            if t <= cutoff:
-                candidate = (t, p)
-            else:
-                break
-        return candidate
+        if not self.buffer:
+            return None
+        times = [t for t, _ in self.buffer]
+        idx = bisect_right(times, cutoff) - 1
+        if idx < 0:
+            return None
+        return self.buffer[idx]
+
+    def _latest_at_or_before(self, ts: datetime):
+        if not self.buffer:
+            return None
+        times = [t for t, _ in self.buffer]
+        idx = bisect_right(times, ts) - 1
+        if idx < 0:
+            return None
+        return self.buffer[idx]
 
     def get_return(self, ts: datetime, window: timedelta):
+        latest = self._latest_at_or_before(ts)
+        if not latest:
+            return None
         ref = self._oldest_for_window(ts, window)
         if not ref:
             return None
-        _, past_price = ref
-        latest_price = self.buffer[-1][1]
+        ref_ts, past_price = ref
+        latest_ts, latest_price = latest
+        if latest_ts < ts - window:
+            return None
+        max_gap = timedelta(seconds=window.total_seconds() * settings.window_max_gap_factor)
+        if ts - ref_ts > max_gap:
+            return None
         if past_price == 0:
             return None
         return (latest_price - past_price) / past_price
 
     def get_vol(self, ts: datetime, window: timedelta):
         cutoff = ts - window
-        window_prices = [p for t, p in self.buffer if t >= cutoff]
+        window_prices = [p for t, p in self.buffer if cutoff <= t <= ts]
         if len(window_prices) < 3:
             return None
         returns = []

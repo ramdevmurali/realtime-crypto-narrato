@@ -85,14 +85,43 @@ class PriceWindow:
         return (latest_price - past_price) / past_price
 
     def get_vol(self, ts: datetime, window: timedelta):
+        if not self.buffer:
+            return None
         cutoff = ts - window
-        window_prices = [p for t, p in self.buffer if cutoff <= t <= ts]
-        if len(window_prices) < 3:
+        step = timedelta(seconds=settings.vol_resample_sec)
+        if step.total_seconds() <= 0:
+            return None
+        times = [t for t, _ in self.buffer]
+        prices = [p for _, p in self.buffer]
+        max_gap = timedelta(seconds=window.total_seconds() * settings.window_max_gap_factor)
+
+        # seed with latest price at/before cutoff
+        idx = bisect_right(times, cutoff) - 1
+        if idx < 0:
+            return None
+        last_idx = idx
+        last_price = prices[last_idx]
+        last_time = times[last_idx]
+
+        resampled = []
+        t = cutoff
+        while t <= ts:
+            idx = bisect_right(times, t) - 1
+            if idx >= 0:
+                last_idx = idx
+                last_price = prices[last_idx]
+                last_time = times[last_idx]
+            if t - last_time > max_gap:
+                return None
+            resampled.append(last_price)
+            t += step
+
+        if len(resampled) < 3:
             return None
         returns = []
-        for i in range(1, len(window_prices)):
-            prev = window_prices[i - 1]
-            cur = window_prices[i]
+        for i in range(1, len(resampled)):
+            prev = resampled[i - 1]
+            cur = resampled[i]
             if prev == 0:
                 continue
             returns.append((cur - prev) / prev)

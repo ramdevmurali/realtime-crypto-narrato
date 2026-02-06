@@ -17,7 +17,7 @@
   - DLQ knob: `price_dlq_topic` (default `prices-deadletter`).
 - `db.py` — asyncpg pool; creates Timescale hypertables (prices, metrics, headlines, anomalies); insert helpers.
 - `utils.py` — now_utc, simple_sentiment stub, llm_summarize (stub/OpenAI/Gemini), backoff helpers (`sleep_backoff`, `with_retries`).
-- `windows.py` — in-memory PriceWindow: add/prune (>16m), returns (1m/5m/15m), volatility per window, keeps smoothed z-score state.
+- `windows.py` — in-memory PriceWindow: add/prune (max window + resample step), strict-window returns/vol, keeps smoothed z-score state.
 - `metrics.py` — computes rolling returns/vol per symbol from PriceWindow; emits raw return z-scores, EWMA-smoothed return z-scores, volatility z-scores + spike flags, and 5th/95th return percentiles per window.
 - `anomaly.py` — threshold checks, rate-limit (60s), direction, summarizes, persists + publishes alerts.
 - `ingest.py` — tasks:
@@ -70,3 +70,11 @@ curl -N 'http://localhost:8000/headlines/stream?limit=5&interval=2'
 
 ## Tests (processor)
 - Unit coverage for PriceWindow (prune/returns/vol), metrics propagation, anomaly triggers/rate limit/direction, ingest dedupe/news processing.
+
+## Window/Retention Policy
+- Window labels and durations are configured via `WINDOW_LABELS` (default `1m,5m,15m`).
+- Prune horizon is derived from the largest window plus the resample step:
+  `max_window + VOL_RESAMPLE_SEC`.
+- Returns/vol are **strict-window**: prices outside the window are not used.
+- Gap handling is controlled by `WINDOW_MAX_GAP_FACTOR` but is clamped to the
+  window size to prevent older spillover.

@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     headline_max_age_sec: int = 900  # max age for attaching latest headline
     rss_seen_ttl_sec: int = 86400  # dedupe TTL for RSS IDs
     rss_seen_max: int = 5000  # max cached RSS IDs
+    window_max_gap_factor: float = 1.5  # max allowed gap vs window size
+    vol_resample_sec: int = 5  # cadence for resampling prices in vol calc
 
     llm_provider: str = "stub"  # stub|openai|google
     openai_api_key: str | None = None

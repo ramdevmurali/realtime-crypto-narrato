@@ -54,13 +54,13 @@ def test_get_return_out_of_order_and_ignores_future():
     assert pytest.approx(ret, rel=1e-6) == (110.0 - 100.0) / 100.0
 
 
-def test_get_return_gap_too_large():
+def test_get_return_strict_window():
     win = PriceWindow()
     now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
     win.add(now - timedelta(minutes=10), 100.0)
-    win.add(now, 110.0)
+    win.add(now - timedelta(minutes=8), 110.0)
 
-    assert win.get_return(now, timedelta(minutes=1)) is None
+    assert win.get_return(now, timedelta(minutes=5)) is None
 
 
 def test_get_return_insufficient_data():
@@ -106,3 +106,27 @@ def test_get_vol_happy_path(monkeypatch):
     expected_var = sum((r - mean) ** 2 for r in returns) / len(returns)
     expected_vol = expected_var ** 0.5
     assert pytest.approx(vol, rel=1e-6) == expected_vol
+
+
+def test_get_vol_strict_window(monkeypatch):
+    monkeypatch.setattr(config_module.settings, "vol_resample_sec", 60)
+    win = PriceWindow()
+    now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+    win.add(now - timedelta(minutes=10), 100.0)
+    win.add(now - timedelta(minutes=8), 110.0)
+
+    assert win.get_vol(now, timedelta(minutes=5)) is None
+
+
+def test_price_window_prune_resample_horizon(monkeypatch):
+    monkeypatch.setattr(config_module.settings, "vol_resample_sec", 60)
+    win = PriceWindow()
+    now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+    win.add(now - timedelta(minutes=17), 90.0)
+    win.add(now - timedelta(minutes=16), 95.0)
+    win.add(now - timedelta(minutes=15), 100.0)
+    win.add(now, 110.0)
+
+    kept_times = [t for t, _ in win.buffer]
+    assert now - timedelta(minutes=17) not in kept_times
+    assert now - timedelta(minutes=16) in kept_times

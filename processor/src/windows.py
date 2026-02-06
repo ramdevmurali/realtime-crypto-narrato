@@ -79,6 +79,8 @@ class PriceWindow:
         cutoff = ts - window
         if latest_ts < cutoff:
             return None
+        if ref_ts == latest_ts:
+            return None
         max_gap = min(window, window * settings.window_max_gap_factor)
         if ts - ref_ts > max_gap:
             return None
@@ -97,8 +99,13 @@ class PriceWindow:
         prices = [p for _, p in self.buffer]
         max_gap = min(window, window * settings.window_max_gap_factor)
 
+        start_idx = bisect_left(times, cutoff)
+        end_idx = bisect_right(times, ts)
+        if end_idx - start_idx < 3:
+            return None
+
         # seed with first price at/after cutoff to avoid spillover outside window
-        first_idx = bisect_left(times, cutoff)
+        first_idx = start_idx
         if first_idx >= len(times):
             return None
         first_time = times[first_idx]

@@ -23,6 +23,23 @@ class FakeConsumer:
         self.commits.append(offsets)
 
 
+class FakeConsumerSeq:
+    def __init__(self, msgs):
+        self.msgs = list(msgs)
+        self.commits = []
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        if not self.msgs:
+            raise StopAsyncIteration
+        return self.msgs.pop(0)
+
+    async def commit(self, offsets):
+        self.commits.append(offsets)
+
+
 class FakeProducer:
     def __init__(self):
         self.sent = []
@@ -71,3 +88,41 @@ async def test_process_prices_task_skips_duplicate(monkeypatch):
 
     assert "btcusdt" not in proc.price_windows
     assert len(proc.consumer.commits) == 1
+
+
+@pytest.mark.asyncio
+async def test_process_prices_task_drops_late_message(monkeypatch):
+    proc = app_module.StreamProcessor()
+    now = "2026-01-27T12:00:00Z"
+    late = "2026-01-27T11:59:59Z"
+    payload1 = json.dumps({"symbol": "btcusdt", "price": 100.0, "time": now}).encode()
+    payload2 = json.dumps({"symbol": "btcusdt", "price": 101.0, "time": late}).encode()
+    msg1 = FakeMsg(payload1)
+    msg2 = FakeMsg(payload2)
+    proc.consumer = FakeConsumerSeq([msg1, msg2])
+    proc.producer = FakeProducer()
+
+    async def no_retry(fn, *args, **kwargs):
+        return await fn(*args, **kwargs)
+
+    calls = {"insert_price": 0}
+
+    async def fake_insert_price(*args, **kwargs):
+        calls["insert_price"] += 1
+        return False
+
+    async def fake_insert_metric(*args, **kwargs):
+        raise AssertionError("insert_metric called")
+
+    async def fake_check_anomalies(*args, **kwargs):
+        raise AssertionError("check_anomalies called")
+
+    monkeypatch.setattr(app_module, "with_retries", no_retry)
+    monkeypatch.setattr(app_module, "insert_price", fake_insert_price)
+    monkeypatch.setattr(app_module, "insert_metric", fake_insert_metric)
+    monkeypatch.setattr(app_module, "check_anomalies", fake_check_anomalies)
+
+    await proc.process_prices_task()
+
+    assert calls["insert_price"] == 1
+    assert len(proc.consumer.commits) == 2

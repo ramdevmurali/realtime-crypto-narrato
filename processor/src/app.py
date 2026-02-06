@@ -30,6 +30,9 @@ class StreamProcessor:
         self.latest_headline: Tuple[str | None, float | None, datetime | None] = (None, None, None)
         self.bad_price_messages = 0
         self.bad_price_log_every = 50
+        self.last_price_ts: Dict[str, datetime] = {}
+        self.late_price_messages = 0
+        self.late_price_log_every = 50
         self.log = get_logger(__name__)
 
     async def start(self):
@@ -114,6 +117,23 @@ class StreamProcessor:
             symbol = price_msg.symbol
             price = float(price_msg.price)
             ts = price_msg.time
+            last_ts = self.last_price_ts.get(symbol)
+            if last_ts and ts < last_ts:
+                self.late_price_messages += 1
+                if self.late_price_messages == 1 or self.late_price_messages % self.late_price_log_every == 0:
+                    self.log.warning(
+                        "price_message_late",
+                        extra={
+                            "symbol": symbol,
+                            "time": ts.isoformat(),
+                            "last_seen": last_ts.isoformat(),
+                            "late_price_messages": self.late_price_messages,
+                        },
+                    )
+                await self._commit_msg(msg)
+                continue
+            if last_ts is None or ts > last_ts:
+                self.last_price_ts[symbol] = ts
 
             try:
                 inserted = await with_retries(insert_price, ts, symbol, price, log=self.log, op="insert_price")

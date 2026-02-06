@@ -40,7 +40,8 @@ class PriceWindow:
         self._prune(ts)
 
     def _prune(self, ts: datetime):
-        cutoff = ts - timedelta(minutes=16)
+        max_window = timedelta(minutes=15)
+        cutoff = ts - (max_window + timedelta(seconds=settings.vol_resample_sec))
         idx = 0
         while idx < len(self.buffer) and self.buffer[idx][0] < cutoff:
             idx += 1
@@ -52,8 +53,8 @@ class PriceWindow:
         if not self.buffer:
             return None
         times = [t for t, _ in self.buffer]
-        idx = bisect_right(times, cutoff) - 1
-        if idx < 0:
+        idx = bisect_left(times, cutoff)
+        if idx >= len(self.buffer):
             return None
         return self.buffer[idx]
 
@@ -75,9 +76,10 @@ class PriceWindow:
             return None
         ref_ts, past_price = ref
         latest_ts, latest_price = latest
-        if latest_ts < ts - window:
+        cutoff = ts - window
+        if latest_ts < cutoff:
             return None
-        max_gap = timedelta(seconds=window.total_seconds() * settings.window_max_gap_factor)
+        max_gap = min(window, window * settings.window_max_gap_factor)
         if ts - ref_ts > max_gap:
             return None
         if past_price == 0:
@@ -93,24 +95,30 @@ class PriceWindow:
             return None
         times = [t for t, _ in self.buffer]
         prices = [p for _, p in self.buffer]
-        max_gap = timedelta(seconds=window.total_seconds() * settings.window_max_gap_factor)
+        max_gap = min(window, window * settings.window_max_gap_factor)
 
-        # seed with latest price at/before cutoff
-        idx = bisect_right(times, cutoff) - 1
-        if idx < 0:
+        # seed with first price at/after cutoff to avoid spillover outside window
+        first_idx = bisect_left(times, cutoff)
+        if first_idx >= len(times):
             return None
-        last_idx = idx
+        first_time = times[first_idx]
+        if first_time > ts:
+            return None
+        if first_time - cutoff > max_gap:
+            return None
+        last_idx = first_idx
         last_price = prices[last_idx]
         last_time = times[last_idx]
 
         resampled = []
-        t = cutoff
+        t = first_time
         while t <= ts:
             idx = bisect_right(times, t) - 1
-            if idx >= 0:
-                last_idx = idx
-                last_price = prices[last_idx]
-                last_time = times[last_idx]
+            if idx < first_idx:
+                return None
+            last_idx = idx
+            last_price = prices[last_idx]
+            last_time = times[last_idx]
             if t - last_time > max_gap:
                 return None
             resampled.append(last_price)

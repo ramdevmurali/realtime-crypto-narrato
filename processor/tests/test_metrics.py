@@ -305,3 +305,106 @@ def test_return_z_ewma_cap(monkeypatch):
     price_windows = {"btcusdt": pw}
     metrics = compute_metrics(price_windows, "btcusdt", now)
     assert metrics["return_z_ewma_5m"] == pytest.approx(6.0)
+
+
+def _metrics_for_series(monkeypatch, prices, start, step_minutes=1, symbol="btcusdt"):
+    monkeypatch.setattr(config_module.settings, "vol_resample_sec", 60)
+    pw = PriceWindow()
+    times = [start + timedelta(minutes=i * step_minutes) for i in range(len(prices))]
+    metrics = None
+    for ts, p in zip(times, prices):
+        pw.add(ts, p)
+        metrics = compute_metrics({symbol: pw}, symbol, ts)
+    return metrics
+
+
+def test_metrics_constant_prices(monkeypatch):
+    now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+    prices = [100, 100, 100, 100, 100, 100]
+    metrics = _metrics_for_series(monkeypatch, prices, now - timedelta(minutes=5))
+    assert metrics is not None
+    assert metrics["return_5m"] == pytest.approx(0.0)
+    assert metrics["vol_5m"] == pytest.approx(0.0)
+    assert metrics["return_z_5m"] is None
+    assert metrics["vol_z_5m"] is None
+
+
+def test_metrics_monotonic_prices(monkeypatch):
+    now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+    prices = [100, 102, 104, 106, 108, 110]
+    metrics = _metrics_for_series(monkeypatch, prices, now - timedelta(minutes=5))
+    assert metrics is not None
+    expected_return = (110 - 100) / 100
+    assert metrics["return_5m"] == pytest.approx(expected_return)
+    assert metrics["vol_5m"] is not None
+    assert metrics["vol_5m"] > 0
+
+
+def test_metrics_mixed_returns_exact(monkeypatch):
+    now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+    prices = [100, 110, 105, 115, 120, 118]
+    metrics = _metrics_for_series(monkeypatch, prices, now - timedelta(minutes=5))
+    assert metrics is not None
+    expected_return = (118 - 100) / 100
+    assert metrics["return_5m"] == pytest.approx(expected_return)
+    returns = []
+    for i in range(1, len(prices)):
+        prev = prices[i - 1]
+        cur = prices[i]
+        returns.append((cur - prev) / prev)
+    mean = sum(returns) / len(returns)
+    expected_var = sum((r - mean) ** 2 for r in returns) / len(returns)
+    expected_vol = expected_var ** 0.5
+    assert metrics["vol_5m"] == pytest.approx(expected_vol)
+
+
+def test_metrics_invariants_scale_and_shift(monkeypatch):
+    now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+    base = [100, 110, 105, 115, 120, 118]
+    scaled = [p * 10 for p in base]
+    shifted = [p + 100 for p in base]
+
+    base_metrics = _metrics_for_series(monkeypatch, base, now - timedelta(minutes=5))
+    scaled_metrics = _metrics_for_series(monkeypatch, scaled, now - timedelta(minutes=5))
+    shifted_metrics = _metrics_for_series(monkeypatch, shifted, now - timedelta(minutes=5))
+
+    assert base_metrics is not None
+    assert scaled_metrics is not None
+    assert shifted_metrics is not None
+
+    assert base_metrics["vol_5m"] >= 0
+    assert base_metrics["return_5m"] == pytest.approx(scaled_metrics["return_5m"])
+    assert base_metrics["vol_5m"] == pytest.approx(scaled_metrics["vol_5m"])
+    assert base_metrics["return_5m"] != pytest.approx(shifted_metrics["return_5m"])
+
+
+def test_metrics_reference_numpy(monkeypatch):
+    np = pytest.importorskip("numpy")
+    monkeypatch.setattr(config_module.settings, "vol_resample_sec", 60)
+    prices = [100, 103, 101, 106, 104, 109, 108, 111, 113]
+    now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+    start = now - timedelta(minutes=8)
+    pw = PriceWindow()
+
+    metrics = None
+    times = [start + timedelta(minutes=i) for i in range(len(prices))]
+    for ts, p in zip(times, prices):
+        pw.add(ts, p)
+        metrics = compute_metrics({"btcusdt": pw}, "btcusdt", ts)
+
+    assert metrics is not None
+    window_prices = prices[-6:]
+    rets = np.diff(window_prices) / np.array(window_prices[:-1])
+    expected_vol = float(np.std(rets, ddof=0))
+    expected_return = (window_prices[-1] - window_prices[0]) / window_prices[0]
+    assert metrics["vol_5m"] == pytest.approx(expected_vol, rel=1e-6)
+    assert metrics["return_5m"] == pytest.approx(expected_return, rel=1e-6)
+
+    prior_returns = []
+    for i in range(5, len(prices) - 1):
+        prior_returns.append((prices[i] - prices[i - 5]) / prices[i - 5])
+    assert len(prior_returns) == 3
+    p05 = float(np.quantile(prior_returns, config_module.settings.return_percentile_low, method="linear"))
+    p95 = float(np.quantile(prior_returns, config_module.settings.return_percentile_high, method="linear"))
+    assert metrics["p05_return_5m"] == pytest.approx(p05, rel=1e-6)
+    assert metrics["p95_return_5m"] == pytest.approx(p95, rel=1e-6)

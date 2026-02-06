@@ -1,7 +1,7 @@
 from typing import List
 from datetime import timedelta
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field
+from pydantic import field_validator, model_validator
 
 
 def _csv(val: str | None, default: List[str]) -> List[str]:
@@ -41,6 +41,27 @@ class Settings(BaseSettings):
     alert_threshold_15m: float = 0.12
 
     window_labels_raw: str = "1m,5m,15m"
+    late_price_tolerance_sec: int = 0
+    anomaly_cooldown_sec: int = 60
+    bad_price_log_every: int = 50
+    late_price_log_every: int = 50
+    price_publish_log_every: int = 500
+    news_publish_log_every: int = 200
+    price_failure_log_every: int = 5
+    news_failure_log_every: int = 3
+    price_backoff_failures_threshold: int = 5
+    price_backoff_base_sec: float = 1.0
+    price_backoff_base_after_failures_sec: float = 2.0
+    price_backoff_cap_sec: float = 60.0
+    news_backoff_failures_threshold: int = 5
+    news_backoff_base_sec: float = 5.0
+    news_backoff_base_after_failures_sec: float = 10.0
+    news_backoff_cap_sec: float = 90.0
+    news_poll_interval_sec: int = 60
+    news_batch_limit: int = 20
+    retry_max_attempts: int = 3
+    retry_backoff_base_sec: float = 1.0
+    retry_backoff_cap_sec: float = 30.0
     ewma_return_alpha: float = 0.25  # smoothing for return z-scores
     vol_z_spike_threshold: float = 3.0  # flag vol spikes
     return_percentile_low: float = 0.05
@@ -73,6 +94,82 @@ class Settings(BaseSettings):
         if 'SYMBOLS' in values:
             values['symbols_raw'] = values.get('SYMBOLS')
         super().__init__(**values)
+
+    @field_validator(
+        "alert_threshold_1m",
+        "alert_threshold_5m",
+        "alert_threshold_15m",
+        "ewma_return_alpha",
+        "vol_z_spike_threshold",
+        "return_percentile_low",
+        "return_percentile_high",
+        "headline_max_age_sec",
+        "rss_seen_ttl_sec",
+        "rss_seen_max",
+        "window_max_gap_factor",
+        "vol_resample_sec",
+        "anomaly_cooldown_sec",
+        "bad_price_log_every",
+        "late_price_log_every",
+        "price_publish_log_every",
+        "news_publish_log_every",
+        "price_failure_log_every",
+        "news_failure_log_every",
+        "price_backoff_failures_threshold",
+        "price_backoff_base_sec",
+        "price_backoff_base_after_failures_sec",
+        "price_backoff_cap_sec",
+        "news_backoff_failures_threshold",
+        "news_backoff_base_sec",
+        "news_backoff_base_after_failures_sec",
+        "news_backoff_cap_sec",
+        "news_poll_interval_sec",
+        "news_batch_limit",
+        "retry_max_attempts",
+        "retry_backoff_base_sec",
+        "retry_backoff_cap_sec",
+    )
+    @classmethod
+    def _positive(cls, v):
+        if v <= 0:
+            raise ValueError("must be positive")
+        return v
+
+    @field_validator("late_price_tolerance_sec")
+    @classmethod
+    def _non_negative(cls, v):
+        if v < 0:
+            raise ValueError("must be >= 0")
+        return v
+
+    @field_validator("llm_provider")
+    @classmethod
+    def _provider_allowed(cls, v):
+        if v not in {"stub", "openai", "google"}:
+            raise ValueError("llm_provider must be one of: stub, openai, google")
+        return v
+
+    @model_validator(mode="after")
+    def _validate_windows_and_percentiles(self):
+        labels = [l.strip().lower() for l in _csv(self.window_labels_raw, ["1m", "5m", "15m"])]
+        if len(set(labels)) != len(labels):
+            raise ValueError("window_labels_raw must be unique")
+        for label in labels:
+            _parse_window_label(label)
+        if not (0 < self.return_percentile_low < 1):
+            raise ValueError("return_percentile_low must be in (0,1)")
+        if not (0 < self.return_percentile_high < 1):
+            raise ValueError("return_percentile_high must be in (0,1)")
+        if self.return_percentile_low >= self.return_percentile_high:
+            raise ValueError("return_percentile_low must be < return_percentile_high")
+        return self
+
+    def safe_dict(self):
+        data = self.model_dump()
+        for key in ("openai_api_key", "google_api_key"):
+            if data.get(key):
+                data[key] = "***"
+        return data
 
     @property
     def kafka_brokers(self) -> List[str]:

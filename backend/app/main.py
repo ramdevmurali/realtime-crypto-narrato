@@ -6,10 +6,12 @@ import uvicorn
 
 import asyncio
 import json
+import logging
 
 from .config import settings
 from . import db
 
+logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -74,25 +76,35 @@ async def stream_headlines(
     interval: float = Query(2.0, ge=0.5),
 ):
     async def event_generator():
+        backoff = 1.0
         while True:
-            rows = await db.fetch_headlines(limit)
-            payload = {
-                "items": [
-                    {
-                        "time": r["time"].isoformat()
-                        if hasattr(r["time"], "isoformat")
-                        else str(r["time"]),
-                        "title": r["title"],
-                        "url": r["url"],
-                        "source": r["source"],
-                        "sentiment": r["sentiment"],
-                    }
-                    for r in rows
-                ],
-                "count": len(rows),
-            }
-            yield f"data: {json.dumps(payload)}\n\n"
-            await asyncio.sleep(interval)
+            try:
+                rows = await db.fetch_headlines(limit)
+                payload = {
+                    "items": [
+                        {
+                            "time": r["time"].isoformat()
+                            if hasattr(r["time"], "isoformat")
+                            else str(r["time"]),
+                            "title": r["title"],
+                            "url": r["url"],
+                            "source": r["source"],
+                            "sentiment": r["sentiment"],
+                        }
+                        for r in rows
+                    ],
+                    "count": len(rows),
+                }
+                yield f"data: {json.dumps(payload)}\n\n"
+                backoff = 1.0
+                await asyncio.sleep(interval)
+            except asyncio.CancelledError:
+                logger.info("headlines_stream_cancelled")
+                break
+            except Exception as exc:
+                logger.warning("headlines_stream_error: %s", exc)
+                await asyncio.sleep(backoff)
+                backoff = min(backoff * 2.0, 30.0)
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 

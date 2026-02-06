@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from processor.src.windows import PriceWindow
+from processor.src import config as config_module
 
 
 def test_price_window_prunes_old_points():
@@ -41,6 +42,27 @@ def test_get_return_happy_path():
     assert pytest.approx(win.get_return(now, timedelta(minutes=15)), rel=1e-6) == (115 - 100) / 100
 
 
+def test_get_return_out_of_order_and_ignores_future():
+    win = PriceWindow()
+    now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+    # add out of order and include a future point
+    win.add(now, 110.0)
+    win.add(now - timedelta(minutes=5), 100.0)
+    win.add(now + timedelta(minutes=1), 120.0)
+
+    ret = win.get_return(now, timedelta(minutes=5))
+    assert pytest.approx(ret, rel=1e-6) == (110.0 - 100.0) / 100.0
+
+
+def test_get_return_gap_too_large():
+    win = PriceWindow()
+    now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+    win.add(now - timedelta(minutes=10), 100.0)
+    win.add(now, 110.0)
+
+    assert win.get_return(now, timedelta(minutes=1)) is None
+
+
 def test_get_return_insufficient_data():
     win = PriceWindow()
     now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
@@ -61,21 +83,24 @@ def test_get_vol_insufficient_data():
     assert win.get_vol(now, timedelta(minutes=5)) is None
 
 
-def test_get_vol_happy_path():
+def test_get_vol_happy_path(monkeypatch):
+    # resample cadence at 1m to make expected values deterministic
+    monkeypatch.setattr(config_module.settings, "vol_resample_sec", 60)
     win = PriceWindow()
     now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
-    prices = [100, 102, 101, 104]  # simple oscillation
-    times = [now - timedelta(minutes=3), now - timedelta(minutes=2), now - timedelta(minutes=1), now]
+    # uneven sampling: prices every 2 minutes
+    prices = [100, 110, 105, 115]
+    times = [now - timedelta(minutes=5), now - timedelta(minutes=3), now - timedelta(minutes=1), now]
     for ts, p in zip(times, prices):
         win.add(ts, p)
 
     vol = win.get_vol(now, timedelta(minutes=5))
     assert vol is not None
-    # manual stddev of step returns
+    # manual stddev of resampled step returns (-5,-4,-3,-2,-1,0)
+    resampled = [100, 100, 110, 110, 105, 115]
     returns = [
-        (102 - 100) / 100,
-        (101 - 102) / 102,
-        (104 - 101) / 101,
+        (resampled[i] - resampled[i - 1]) / resampled[i - 1]
+        for i in range(1, len(resampled))
     ]
     mean = sum(returns) / len(returns)
     expected_var = sum((r - mean) ** 2 for r in returns) / len(returns)

@@ -61,7 +61,8 @@ def test_compute_metrics_attention_max_ratio():
     assert pytest.approx(metrics["attention"], rel=1e-6) == expected
 
 
-def test_compute_metrics_propagates_returns_and_vol():
+def test_compute_metrics_propagates_returns_and_vol(monkeypatch):
+    monkeypatch.setattr(config_module.settings, "vol_resample_sec", 60)
     pw = PriceWindow()
     now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
     # Prices crafted to give clear returns and vols over 5m window
@@ -81,8 +82,8 @@ def test_compute_metrics_propagates_returns_and_vol():
     expected_return_5m = (115.5 - 100.0) / 100.0  # 0.155
     assert pytest.approx(metrics["return_5m"], rel=1e-6) == expected_return_5m
 
-    # vol over the prices within 5m
-    window_prices = [100.0, 110.0, 105.0, 115.5]
+    # vol over the resampled prices within 5m (-5,-4,-3,-2,-1,0)
+    window_prices = [100.0, 100.0, 110.0, 110.0, 105.0, 115.5]
     returns = []
     for i in range(1, len(window_prices)):
         prev = window_prices[i - 1]
@@ -136,6 +137,7 @@ def test_compute_metrics_return_z_score_insufficient_data():
 
 
 def test_vol_z_and_spike(monkeypatch):
+    monkeypatch.setattr(config_module.settings, "vol_resample_sec", 60)
     pw = PriceWindow()
     now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
     prices = [100.0, 102.0, 104.0, 106.0, 108.0, 110.0, 112.0, 114.0]
@@ -246,7 +248,7 @@ def test_return_percentiles_insufficient_data():
 def test_return_z_ewma_smoothing(monkeypatch):
     pw = PriceWindow()
     now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
-    pw.add(now - timedelta(minutes=2), 100.0)
+    pw.add(now - timedelta(minutes=1), 100.0)
     pw.add(now, 110.0)
 
     # Feed controlled z-scores per call: first 1.0 then 3.0 for the 1m window

@@ -70,6 +70,7 @@ curl -N 'http://localhost:8000/headlines/stream?limit=5&interval=2'
 
 ## Tests (processor)
 - Unit coverage for PriceWindow (prune/returns/vol), metrics propagation, anomaly triggers/rate limit/direction, ingest dedupe/news processing.
+- Integration coverage (Kafka + Timescale) for happy path, retry path, and DLQ routing (see `scripts/integration_test.sh`).
 
 ## Window/Retention Policy
 - Window labels and durations are configured via `WINDOW_LABELS` (default `1m,5m,15m`).

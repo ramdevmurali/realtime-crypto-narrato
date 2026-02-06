@@ -1,5 +1,5 @@
 from datetime import timedelta
-from .config import settings, get_thresholds
+from .config import settings, get_thresholds, get_windows
 from typing import List
 import math
 
@@ -58,11 +58,7 @@ def _percentile(series: List[float], pct: float):
 
 def compute_metrics(price_windows, symbol: str, ts):
     win = price_windows[symbol]
-    windows = {
-        "1m": timedelta(minutes=1),
-        "5m": timedelta(minutes=5),
-        "15m": timedelta(minutes=15),
-    }
+    windows = get_windows()
     metrics = {}
     for label, delta in windows.items():
         ret = win.get_return(ts, delta)

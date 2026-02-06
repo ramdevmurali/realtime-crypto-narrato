@@ -1,4 +1,5 @@
 from typing import List
+from datetime import timedelta
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 
@@ -7,6 +8,21 @@ def _csv(val: str | None, default: List[str]) -> List[str]:
     if not val:
         return default
     return [v.strip() for v in val.split(',') if v.strip()]
+
+
+def _parse_window_label(label: str):
+    label = label.strip().lower()
+    if len(label) < 2:
+        raise ValueError(f"invalid window label: {label}")
+    unit = label[-1]
+    value = int(label[:-1])
+    if unit == "s":
+        return timedelta(seconds=value)
+    if unit == "m":
+        return timedelta(minutes=value)
+    if unit == "h":
+        return timedelta(hours=value)
+    raise ValueError(f"invalid window label: {label}")
 
 
 class Settings(BaseSettings):
@@ -24,6 +40,7 @@ class Settings(BaseSettings):
     alert_threshold_5m: float = 0.08
     alert_threshold_15m: float = 0.12
 
+    window_labels_raw: str = "1m,5m,15m"
     ewma_return_alpha: float = 0.25  # smoothing for return z-scores
     vol_z_spike_threshold: float = 3.0  # flag vol spikes
     return_percentile_low: float = 0.05
@@ -74,3 +91,11 @@ def get_thresholds():
         "5m": settings.alert_threshold_5m,
         "15m": settings.alert_threshold_15m,
     }
+
+
+def get_windows():
+    labels = _csv(settings.window_labels_raw, ["1m", "5m", "15m"])
+    windows = {}
+    for label in labels:
+        windows[label] = _parse_window_label(label)
+    return windows

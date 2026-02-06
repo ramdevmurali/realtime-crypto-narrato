@@ -3,7 +3,7 @@ from collections import deque
 from datetime import datetime, timedelta
 from typing import Deque, Tuple, List
 
-from .config import settings
+from .config import settings, get_windows
 
 
 class PriceWindow:
@@ -40,7 +40,8 @@ class PriceWindow:
         self._prune(ts)
 
     def _prune(self, ts: datetime):
-        max_window = timedelta(minutes=15)
+        windows = get_windows()
+        max_window = max(windows.values()) if windows else timedelta(minutes=15)
         cutoff = ts - (max_window + timedelta(seconds=settings.vol_resample_sec))
         idx = 0
         while idx < len(self.buffer) and self.buffer[idx][0] < cutoff:

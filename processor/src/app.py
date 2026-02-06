@@ -5,7 +5,6 @@ from datetime import datetime, timedelta
 from typing import Dict, Tuple
 
 from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
-from aiokafka.structs import TopicPartition, OffsetAndMetadata
 from dateutil import parser as dateparser
 
 import contextlib
@@ -197,9 +196,12 @@ class StreamProcessor:
             await self._commit_msg(msg)
 
     async def _commit_msg(self, msg):
-        tp = TopicPartition(msg.topic, msg.partition)
         try:
-            await self.consumer.commit({tp: OffsetAndMetadata(msg.offset + 1, None)})
+            await with_retries(
+                self.consumer.commit,
+                log=self.log,
+                op="commit_price",
+            )
         except Exception as exc:
             self.log.warning("price_commit_failed", extra={"error": str(exc), "offset": msg.offset})
 

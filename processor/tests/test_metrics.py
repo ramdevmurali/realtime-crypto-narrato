@@ -400,10 +400,14 @@ def test_metrics_reference_numpy(monkeypatch):
     assert metrics["vol_5m"] == pytest.approx(expected_vol, rel=1e-6)
     assert metrics["return_5m"] == pytest.approx(expected_return, rel=1e-6)
 
+    # strict-window history: use first price at/after cutoff for each prior ts
     prior_returns = []
-    for i in range(5, len(prices) - 1):
-        prior_returns.append((prices[i] - prices[i - 5]) / prices[i - 5])
-    assert len(prior_returns) == 3
+    for i in range(1, len(prices) - 1):
+        cutoff = times[i] - timedelta(minutes=5)
+        j = next(idx for idx, t in enumerate(times) if t >= cutoff)
+        if j == i:
+            continue
+        prior_returns.append((prices[i] - prices[j]) / prices[j])
     p05 = float(np.quantile(prior_returns, config_module.settings.return_percentile_low, method="linear"))
     p95 = float(np.quantile(prior_returns, config_module.settings.return_percentile_high, method="linear"))
     assert metrics["p05_return_5m"] == pytest.approx(p05, rel=1e-6)

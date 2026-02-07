@@ -29,6 +29,7 @@ class StreamProcessor:
         self.last_price_ts: Dict[str, datetime] = {}
         self.late_price_messages = 0
         self.late_price_log_every = settings.late_price_log_every
+        self.alerts_emitted = 0
         self.log = get_logger(__name__)
 
     async def start(self):

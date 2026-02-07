@@ -11,6 +11,7 @@ from ..io.db import insert_headline
 from ..utils import now_utc, simple_sentiment, sleep_backoff, with_retries
 from ..logging_config import get_logger
 from ..io.models.messages import PriceMsg, NewsMsg
+from ..processor_state import ProcessorState
 
 
 def _prune_seen(seen_cache: dict[str, datetime], seen_order: deque[str], now_ts):
@@ -28,7 +29,13 @@ def _prune_seen(seen_cache: dict[str, datetime], seen_order: deque[str], now_ts)
         seen_cache.pop(oldest, None)
 
 
-async def process_feed_entry(processor, entry, seen_cache: dict[str, datetime], seen_order: deque[str], seen_now):
+async def process_feed_entry(
+    processor: ProcessorState,
+    entry,
+    seen_cache: dict[str, datetime],
+    seen_order: deque[str],
+    seen_now,
+):
     uid = entry.get('id') or entry.get('link') or entry.get('title')
     if uid in seen_cache:
         return False
@@ -51,7 +58,7 @@ async def process_feed_entry(processor, entry, seen_cache: dict[str, datetime], 
     return True
 
 
-async def price_ingest_task(processor):
+async def price_ingest_task(processor: ProcessorState):
     """Stream prices from Binance and publish raw ticks to Kafka."""
     assert processor.producer
     log = getattr(processor, "log", get_logger(__name__))
@@ -90,7 +97,7 @@ async def price_ingest_task(processor):
                 log.warning("price_failure_count", extra={"failures": failures})
 
 
-async def news_ingest_task(processor):
+async def news_ingest_task(processor: ProcessorState):
     """Poll RSS feed, sentiment tag, and publish headlines."""
     assert processor.producer
     log = getattr(processor, "log", get_logger(__name__))

@@ -6,6 +6,7 @@ from ..io.db import insert_price, insert_metric
 from ..domain.metrics import compute_metrics
 from ..domain.anomaly import check_anomalies
 from ..utils import with_retries
+from ..processor_state import ProcessorState
 
 
 @dataclass
@@ -14,7 +15,7 @@ class PipelineError(Exception):
     error: Exception
 
 
-async def process_price(proc, symbol: str, price: float, ts) -> bool:
+async def process_price(proc: ProcessorState, symbol: str, price: float, ts) -> bool:
     try:
         inserted = await with_retries(insert_price, ts, symbol, price, log=proc.log, op="insert_price")
     except Exception as exc:

@@ -5,9 +5,10 @@ from ..config import settings
 from ..io.models.messages import PriceMsg
 from .price_pipeline import process_price, PipelineError
 from ..logging_config import get_logger
+from ..processor_state import ProcessorState
 
 
-async def consume_prices(proc) -> None:
+async def consume_prices(proc: ProcessorState) -> None:
     """Consume prices from Kafka, compute metrics, check anomalies."""
     assert proc.consumer
     log = getattr(proc, "log", get_logger(__name__))

@@ -6,9 +6,10 @@ from ..io.db import insert_anomaly
 from ..utils import llm_summarize, with_retries
 from ..logging_config import get_logger
 from ..io.models.messages import SummaryRequestMsg, AlertMsg
+from ..processor_state import ProcessorState
 
 
-async def check_anomalies(processor, symbol: str, ts, metrics):
+async def check_anomalies(processor: ProcessorState, symbol: str, ts, metrics):
     """Detect and publish anomalies for a symbol at time ts based on metrics."""
     producer = processor.producer
     assert producer

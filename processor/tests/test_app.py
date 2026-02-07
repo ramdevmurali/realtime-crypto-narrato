@@ -2,7 +2,7 @@ import json
 import pytest
 
 from processor.src import app as app_module
-from processor.src import price_pipeline as pipeline_module
+from processor.src.services import price_pipeline as pipeline_module
 
 
 class FakeConsumer:

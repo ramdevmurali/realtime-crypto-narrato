@@ -5,7 +5,7 @@ from datetime import datetime, timezone, timedelta
 
 import pytest
 
-from processor.src import ingest
+from processor.src.services import ingest
 from processor.src.config import settings
 
 

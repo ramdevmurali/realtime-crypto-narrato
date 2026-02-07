@@ -7,14 +7,14 @@ import contextlib
 from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
 
 from .config import settings
-from .db import init_tables
-from .windows import PriceWindow
-from .ingest import price_ingest_task, news_ingest_task
+from .io.db import init_tables
+from .domain.windows import PriceWindow
+from .services.ingest import price_ingest_task, news_ingest_task
 from .utils import with_retries
 from .logging_config import get_logger
-from .runtime import log_startup_config
-from .health import healthcheck
-from .price_consumer import consume_prices
+from .services.runtime import log_startup_config
+from .services.health import healthcheck
+from .services.price_consumer import consume_prices
 
 
 class StreamProcessor:

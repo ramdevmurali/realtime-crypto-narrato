@@ -4,7 +4,7 @@ from datetime import datetime, timezone, timedelta
 import pytest
 import json
 
-from processor.src import anomaly
+from processor.src.domain import anomaly
 from processor.src.config import settings
 
 

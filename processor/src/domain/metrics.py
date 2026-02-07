@@ -1,5 +1,5 @@
 from datetime import timedelta
-from .config import settings, get_thresholds, get_windows
+from ..config import settings, get_thresholds, get_windows
 from typing import List
 import math
 

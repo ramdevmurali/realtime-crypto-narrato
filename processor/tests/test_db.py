@@ -1,6 +1,6 @@
 import pytest
 
-from processor.src import db
+from processor.src.io import db
 
 
 class FakeConn:

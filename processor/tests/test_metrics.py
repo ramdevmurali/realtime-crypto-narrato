@@ -3,9 +3,9 @@ from datetime import datetime, timedelta, timezone
 import pytest
 import math
 
-from processor.src.metrics import compute_metrics
-from processor.src import metrics as metrics_module
-from processor.src.windows import PriceWindow
+from processor.src.domain.metrics import compute_metrics
+from processor.src.domain import metrics as metrics_module
+from processor.src.domain.windows import PriceWindow
 from processor.src import config as config_module
 
 

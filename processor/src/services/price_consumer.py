@@ -1,10 +1,10 @@
 import json
 from datetime import timedelta
 
-from .config import settings
-from .models.messages import PriceMsg
+from ..config import settings
+from ..io.models.messages import PriceMsg
 from .price_pipeline import process_price, PipelineError
-from .logging_config import get_logger
+from ..logging_config import get_logger
 
 
 async def consume_prices(proc) -> None:

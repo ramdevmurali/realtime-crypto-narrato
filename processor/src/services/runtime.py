@@ -1,4 +1,4 @@
-from .config import settings, get_thresholds, get_windows
+from ..config import settings, get_thresholds, get_windows
 
 
 def log_startup_config(log) -> None:

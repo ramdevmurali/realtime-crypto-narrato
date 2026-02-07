@@ -2,8 +2,8 @@ import contextlib
 
 from aiokafka import AIOKafkaProducer
 
-from .config import settings
-from .db import get_pool
+from ..config import settings
+from ..io.db import get_pool
 
 
 async def healthcheck_db(log) -> None:

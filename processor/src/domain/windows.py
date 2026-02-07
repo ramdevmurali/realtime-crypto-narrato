@@ -3,7 +3,7 @@ from collections import deque
 from datetime import datetime, timedelta
 from typing import Deque, Tuple, List
 
-from .config import settings, get_windows
+from ..config import settings, get_windows
 
 
 class PriceWindow:

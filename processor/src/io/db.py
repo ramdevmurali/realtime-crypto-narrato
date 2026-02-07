@@ -1,7 +1,7 @@
 import asyncpg
 from typing import Any, Dict
-from .config import settings
-from .logging_config import get_logger
+from ..config import settings
+from ..logging_config import get_logger
 
 _pool: asyncpg.Pool | None = None
 log = get_logger(__name__)

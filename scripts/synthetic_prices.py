@@ -7,9 +7,9 @@ from datetime import datetime, timedelta, timezone
 ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.join(ROOT, ".."))  # so we can import src.* when /app is PYTHONPATH
 
-from src.windows import PriceWindow  # type: ignore
-from src.metrics import compute_metrics  # type: ignore
-from src.db import insert_price, insert_metric, get_pool, close_pool  # type: ignore
+from src.domain.windows import PriceWindow  # type: ignore
+from src.domain.metrics import compute_metrics  # type: ignore
+from src.io.db import insert_price, insert_metric, get_pool, close_pool  # type: ignore
 
 
 async def run():

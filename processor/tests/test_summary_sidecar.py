@@ -2,8 +2,8 @@ import asyncio
 import json
 import pytest
 
-from services import summary_sidecar  # type: ignore
-from config import settings  # type: ignore
+from processor.src.services import summary_sidecar  # type: ignore
+from processor.src.config import settings  # type: ignore
 
 
 class FakePool:

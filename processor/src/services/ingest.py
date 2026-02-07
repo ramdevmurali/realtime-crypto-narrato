@@ -6,11 +6,11 @@ import feedparser
 import websockets
 from dateutil import parser as dateparser
 
-from .config import settings
-from .db import insert_headline
-from .utils import now_utc, simple_sentiment, sleep_backoff, with_retries
-from .logging_config import get_logger
-from .models.messages import PriceMsg, NewsMsg
+from ..config import settings
+from ..io.db import insert_headline
+from ..utils import now_utc, simple_sentiment, sleep_backoff, with_retries
+from ..logging_config import get_logger
+from ..io.models.messages import PriceMsg, NewsMsg
 
 
 def _prune_seen(seen_cache: dict[str, datetime], seen_order: deque[str], now_ts):

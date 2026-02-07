@@ -5,10 +5,10 @@ import asyncpg
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 from aiokafka.structs import TopicPartition, OffsetAndMetadata
 
-from src.config import settings
-from src.logging_config import get_logger
-from src.utils import llm_summarize, with_retries
-from src.models.messages import SummaryRequestMsg, AlertMsg
+from ..config import settings
+from ..logging_config import get_logger
+from ..utils import llm_summarize, with_retries
+from ..io.models.messages import SummaryRequestMsg, AlertMsg
 
 
 log = get_logger(__name__)

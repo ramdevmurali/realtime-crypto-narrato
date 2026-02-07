@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .db import insert_price, insert_metric
-from .metrics import compute_metrics
-from .anomaly import check_anomalies
-from .utils import with_retries
+from ..io.db import insert_price, insert_metric
+from ..domain.metrics import compute_metrics
+from ..domain.anomaly import check_anomalies
+from ..utils import with_retries
 
 
 @dataclass

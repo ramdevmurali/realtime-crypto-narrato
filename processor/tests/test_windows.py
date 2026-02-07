@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from processor.src.windows import PriceWindow
+from processor.src.domain.windows import PriceWindow
 from processor.src import config as config_module
 
 

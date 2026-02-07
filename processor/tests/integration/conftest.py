@@ -12,7 +12,7 @@ import pytest_asyncio
 from aiokafka import AIOKafkaProducer
 
 from processor.src import config as config_module
-from processor.src.db import init_tables, close_pool
+from processor.src.io.db import init_tables, close_pool
 
 
 def _compose_file() -> Path:

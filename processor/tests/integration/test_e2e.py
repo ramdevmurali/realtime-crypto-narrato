@@ -8,10 +8,10 @@ from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 from aiokafka.structs import TopicPartition
 
 from processor.src import app as app_module
-from processor.src import price_pipeline as pipeline_module
+from processor.src.services import price_pipeline as pipeline_module
 from processor.src.config import settings
-from processor.src.db import get_pool
-from processor.src.models.messages import PriceMsg
+from processor.src.io.db import get_pool
+from processor.src.io.models.messages import PriceMsg
 from processor.src.utils import now_utc
 
 

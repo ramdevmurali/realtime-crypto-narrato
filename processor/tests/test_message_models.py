@@ -2,7 +2,7 @@ import json
 from datetime import datetime, timezone
 import pytest
 
-from processor.src.models.messages import PriceMsg, NewsMsg, SummaryRequestMsg, AlertMsg
+from processor.src.io.models.messages import PriceMsg, NewsMsg, SummaryRequestMsg, AlertMsg
 
 
 def test_price_msg_valid():

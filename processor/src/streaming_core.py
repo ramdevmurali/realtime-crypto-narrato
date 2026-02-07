@@ -15,9 +15,10 @@ from .logging_config import get_logger
 from .services.runtime import log_startup_config
 from .services.health import healthcheck
 from .services.price_consumer import consume_prices
+from .runtime_interface import RuntimeService
 
 
-class StreamProcessor:
+class StreamProcessor(RuntimeService):
     def __init__(self):
         self.producer: AIOKafkaProducer | None = None
         self.consumer: AIOKafkaConsumer | None = None

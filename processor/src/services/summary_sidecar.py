@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import json
 import signal
 import asyncpg
@@ -7,6 +8,7 @@ from aiokafka.structs import TopicPartition, OffsetAndMetadata
 
 from ..config import settings
 from ..logging_config import get_logger
+from ..runtime_interface import RuntimeService
 from ..utils import llm_summarize, with_retries
 from ..io.models.messages import SummaryRequestMsg, AlertMsg
 
@@ -15,45 +17,78 @@ log = get_logger(__name__)
 _llm_semaphore = asyncio.Semaphore(2)
 
 
+class SummarySidecar(RuntimeService):
+    def __init__(self):
+        self.log = log
+        self._stop_event = asyncio.Event()
+        self._stopped = False
+        self._producer: AIOKafkaProducer | None = None
+        self._consumer: AIOKafkaConsumer | None = None
+        self._pool: asyncpg.Pool | None = None
+
+    def request_stop(self) -> None:
+        self._stop_event.set()
+
+    async def start(self) -> None:
+        loop = asyncio.get_running_loop()
+        self.log.info(
+            "summary_sidecar_start",
+            extra={"brokers": settings.kafka_brokers, "topic": settings.summaries_topic},
+        )
+
+        self._producer = AIOKafkaProducer(bootstrap_servers=settings.kafka_brokers, loop=loop)
+        self._consumer = AIOKafkaConsumer(
+            settings.summaries_topic,
+            bootstrap_servers=settings.kafka_brokers,
+            loop=loop,
+            enable_auto_commit=False,
+            auto_offset_reset="latest",
+            group_id=settings.summary_consumer_group,
+        )
+
+        self._pool = await asyncpg.create_pool(dsn=settings.database_url)
+        await self._producer.start()
+        await self._consumer.start()
+
+        try:
+            while not self._stop_event.is_set():
+                msg_batch = await self._consumer.getmany(
+                    timeout_ms=settings.summary_poll_timeout_ms,
+                    max_records=settings.summary_batch_max,
+                )
+                for tp, messages in msg_batch.items():
+                    for msg in messages:
+                        await process_summary_record(msg, self._consumer, self._producer, self._pool, self.log)
+                await asyncio.sleep(0)  # yield control
+        finally:
+            await self._shutdown()
+
+    async def stop(self) -> None:
+        self._stop_event.set()
+        await self._shutdown()
+
+    async def _shutdown(self) -> None:
+        if self._stopped:
+            return
+        self._stopped = True
+        if self._consumer:
+            with contextlib.suppress(Exception):
+                await self._consumer.stop()
+        if self._producer:
+            with contextlib.suppress(Exception):
+                await self._producer.stop()
+        if self._pool:
+            with contextlib.suppress(Exception):
+                await self._pool.close()
+        self.log.info("summary_sidecar_stop")
+
+
 async def main():
     loop = asyncio.get_running_loop()
-
-    stop_event = asyncio.Event()
-
+    sidecar = SummarySidecar()
     for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, stop_event.set)
-
-    log.info("summary_sidecar_start", extra={"brokers": settings.kafka_brokers, "topic": settings.summaries_topic})
-
-    producer = AIOKafkaProducer(bootstrap_servers=settings.kafka_brokers, loop=loop)
-    consumer = AIOKafkaConsumer(
-        settings.summaries_topic,
-        bootstrap_servers=settings.kafka_brokers,
-        loop=loop,
-        enable_auto_commit=False,
-        auto_offset_reset="latest",
-        group_id=settings.summary_consumer_group,
-    )
-
-    pool = await asyncpg.create_pool(dsn=settings.database_url)
-    await producer.start()
-    await consumer.start()
-
-    try:
-        while not stop_event.is_set():
-            msg_batch = await consumer.getmany(
-                timeout_ms=settings.summary_poll_timeout_ms,
-                max_records=settings.summary_batch_max,
-            )
-            for tp, messages in msg_batch.items():
-                for msg in messages:
-                    await process_summary_record(msg, consumer, producer, pool, log)
-            await asyncio.sleep(0)  # yield control
-    finally:
-        await consumer.stop()
-        await producer.stop()
-        await pool.close()
-        log.info("summary_sidecar_stop")
+        loop.add_signal_handler(sig, sidecar.request_stop)
+    await sidecar.start()
 
 
 async def handle_summary_message(raw_value: bytes, producer, pool, log):

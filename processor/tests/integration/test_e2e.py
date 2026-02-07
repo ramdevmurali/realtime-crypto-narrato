@@ -147,3 +147,34 @@ async def test_e2e_dlq_path(integration_services, integration_settings):
         raise AssertionError("offset not committed after DLQ")
     finally:
         await _stop_processor(proc, task)
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_e2e_kafka_transient_failure(integration_services, integration_settings, monkeypatch):
+    group_id = f"processor-it-{uuid.uuid4().hex}"
+    proc, task = await _start_processor(group_id)
+    try:
+        calls = {"count": 0}
+        assert proc.producer is not None
+        original_send = proc.producer.send_and_wait
+
+        async def flaky_send(topic, payload, *args, **kwargs):
+            calls["count"] += 1
+            if calls["count"] == 1:
+                raise RuntimeError("transient kafka error")
+            return await original_send(topic, payload, *args, **kwargs)
+
+        monkeypatch.setattr(proc.producer, "send_and_wait", flaky_send)
+
+        now = now_utc()
+        prices = [
+            PriceMsg(symbol="btcusdt", price=100.0, time=now),
+            PriceMsg(symbol="btcusdt", price=110.0, time=now + timedelta(seconds=30)),
+        ]
+        await _publish_prices(prices)
+
+        await _wait_for_count("SELECT count(*) FROM anomalies WHERE symbol=$1", ("btcusdt",), 1)
+        assert calls["count"] >= 2
+    finally:
+        await _stop_processor(proc, task)

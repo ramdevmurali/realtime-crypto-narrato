@@ -15,17 +15,22 @@
 ## Modules
 - `config.py` — pydantic settings (DB URL, Kafka brokers/topics, Binance stream, symbols, RSS, thresholds, LLM keys). CSV env parsing for brokers/symbols.
   - DLQ knob: `price_dlq_topic` (default `prices-deadletter`).
-- `db.py` — asyncpg pool; creates Timescale hypertables (prices, metrics, headlines, anomalies); insert helpers.
+- `io/db.py` — asyncpg pool; creates Timescale hypertables (prices, metrics, headlines, anomalies); insert helpers.
 - `utils.py` — now_utc, simple_sentiment stub, llm_summarize (stub/OpenAI/Gemini), backoff helpers (`sleep_backoff`, `with_retries`).
-- `windows.py` — in-memory PriceWindow: add/prune (max window + resample step), strict-window returns/vol, keeps smoothed z-score state.
-- `metrics.py` — computes rolling returns/vol per symbol from PriceWindow; emits raw return z-scores, EWMA-smoothed return z-scores, volatility z-scores + spike flags, and 5th/95th return percentiles per window.
-- `anomaly.py` — threshold checks, rate-limit (60s), direction, summarizes, persists + publishes alerts.
-- `ingest.py` — tasks:
+- `domain/windows.py` — in-memory PriceWindow: add/prune (max window + resample step), strict-window returns/vol, keeps smoothed z-score state.
+- `domain/metrics.py` — computes rolling returns/vol per symbol from PriceWindow; emits raw return z-scores, EWMA-smoothed return z-scores, volatility z-scores + spike flags, and 5th/95th return percentiles per window.
+- `domain/anomaly.py` — threshold checks, rate-limit (60s), direction, summarizes, persists + publishes alerts.
+- `services/ingest.py` — tasks:
   - `price_ingest_task`: Binance WS → Kafka `prices` → Timescale `prices`.
   - `news_ingest_task`: RSS → dedupe → sentiment stub → Kafka `news` → Timescale `headlines`.
   - Includes backoff/jitter, counters, graceful cancel.
-- `app.py` (entrypoint: `python -m src.app`) — orchestrator: healthcheck DB/Kafka, start producer/consumer, run process_prices_task, manage state (price windows, last alert, latest headline).
-- `main.py` — removed in favor of the single entrypoint `python -m src.app`.
+- `services/price_consumer.py` — Kafka consume loop + commit policy.
+- `services/price_pipeline.py` — DB + metrics + anomaly pipeline.
+- `services/runtime.py` — startup config logging.
+- `services/health.py` — DB/Kafka health checks.
+- `services/summary_sidecar.py` — enriches alerts with LLM summaries from `summaries` topic.
+- `streaming_core.py` — orchestrator + shared state.
+- `app.py` (entrypoint: `python -m src.app`) — thin entrypoint for `StreamProcessor`.
 
 ## Data written to Timescale
 - `prices(time, symbol, price, PK (time, symbol))`
@@ -34,13 +39,13 @@
 - `anomalies(time, symbol, window_name, direction, return_value, threshold, headline, sentiment, summary)`
 
 ## Alert path and summaries
-- Threshold check & cooldown happen in `anomaly.py`; if tripped, the alert is persisted to Timescale and published to the `alerts` topic.
+- Threshold check & cooldown happen in `domain/anomaly.py`; if tripped, the alert is persisted to Timescale and published to the `alerts` topic.
 - The processor no longer calls the LLM in the hot path. It publishes a summary-request message to the `summaries` topic with `{time, symbol, window, direction, ret, threshold, headline, sentiment}`. Alerts still carry the base/stub summary.
 - A future sidecar can consume `summaries`, call the configured LLM, and backfill richer summaries asynchronously.
   - Sidecar knobs: `SUMMARY_CONSUMER_GROUP`, `SUMMARY_POLL_TIMEOUT_MS`, `SUMMARY_BATCH_MAX` (optional) control consumption behavior.
 
 ## Topic payloads (required fields)
-Canonical payload models live in `processor/src/models/messages.py`.
+Canonical payload models live in `processor/src/io/models/messages.py`.
 - `prices`: `symbol`, `price`, `time`
 - `news`: `time`, `title`, `source`, `sentiment` (optional: `url`)
 - `summaries` (summary-request): `time`, `symbol`, `window`, `direction`, `ret`, `threshold` (optional: `headline`, `sentiment`)
@@ -50,11 +55,11 @@ Non-goals for now:
 - No schema registry (JSON/Avro) yet; models + tests enforce contracts.
 
 ## Interfaces (module inputs/outputs)
-- `ingest.py`: inputs — Binance WS ticks + RSS feed; outputs — Kafka `prices`/`news`, Timescale `prices`/`headlines`, updates `processor.latest_headline`.
-- `metrics.py`: inputs — `PriceWindow` state per symbol; outputs — metrics dict (returns/vol/z/percentiles) for the current tick.
-- `anomaly.py`: inputs — symbol, timestamp, metrics; outputs — Timescale `anomalies`, Kafka `alerts`, Kafka `summaries` request.
-- `app.py`: orchestrator; owns Kafka producer/consumer, `price_windows`, `last_alert`, `latest_headline`, DLQ counters.
-- `summary_sidecar.py`: inputs — Kafka `summaries` requests; outputs — Timescale `anomalies` summary upsert, Kafka `alerts` enriched.
+- `services/ingest.py`: inputs — Binance WS ticks + RSS feed; outputs — Kafka `prices`/`news`, Timescale `prices`/`headlines`, updates `processor.latest_headline`.
+- `domain/metrics.py`: inputs — `PriceWindow` state per symbol; outputs — metrics dict (returns/vol/z/percentiles) for the current tick.
+- `domain/anomaly.py`: inputs — symbol, timestamp, metrics; outputs — Timescale `anomalies`, Kafka `alerts`, Kafka `summaries` request.
+- `streaming_core.py`: orchestrator; owns Kafka producer/consumer, `price_windows`, `last_alert`, `latest_headline`, DLQ counters.
+- `services/summary_sidecar.py`: inputs — Kafka `summaries` requests; outputs — Timescale `anomalies` summary upsert, Kafka `alerts` enriched.
 
 ## How to run
 ```

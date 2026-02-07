@@ -32,6 +32,8 @@
 - `streaming_core.py` — orchestrator + shared state.
 - `app.py` (entrypoint: `python -m src.app`) — thin entrypoint for `StreamProcessor`.
 
+Note: legacy folders like `processor/src/models` and `processor/src/processor/services` are removed; use `io/models` and `services/` instead.
+
 ## Data written to Timescale
 - `prices(time, symbol, price, PK (time, symbol))`
 - `metrics(time, symbol, return_1m/5m/15m, vol_1m/5m/15m, return_z_1m/5m/15m, return_z_ewma_1m/5m/15m, vol_z_1m/5m/15m, vol_spike_1m/5m/15m, p05_return_1m/5m/15m, p95_return_1m/5m/15m, attention)`

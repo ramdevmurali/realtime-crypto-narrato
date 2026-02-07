@@ -52,6 +52,14 @@ Notes:
 - Uses pytest-asyncio for async cases.
 - No external services required; Kafka/DB are mocked.
 
+## Smoke test (unit + integration)
+From repo root:
+```
+make smoke-test
+```
+Notes:
+- Runs unit tests first, then integration tests with `RUN_INTEGRATION=1`.
+
 ## Integration tests
 Requires docker compose services:
 ```

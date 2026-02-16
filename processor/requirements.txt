@@ -9,3 +9,5 @@ python-dateutil==2.9.0.post0
 numpy==1.26.4
 tenacity==8.2.3
 google-generativeai==0.3.2
+onnxruntime==1.17.1
+tokenizers==0.15.2

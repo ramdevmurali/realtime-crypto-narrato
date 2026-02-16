@@ -78,12 +78,16 @@ def integration_settings():
         "alerts_topic": settings.alerts_topic,
         "summaries_topic": settings.summaries_topic,
         "news_topic": settings.news_topic,
+        "news_enriched_topic": settings.news_enriched_topic,
+        "news_dlq_topic": settings.news_dlq_topic,
         "summary_consumer_group": settings.summary_consumer_group,
+        "sentiment_sidecar_group": settings.sentiment_sidecar_group,
         "retry_max_attempts": settings.retry_max_attempts,
         "retry_backoff_base_sec": settings.retry_backoff_base_sec,
         "retry_backoff_cap_sec": settings.retry_backoff_cap_sec,
         "late_price_tolerance_sec": settings.late_price_tolerance_sec,
         "llm_provider": settings.llm_provider,
+        "sentiment_provider": settings.sentiment_provider,
     }
     settings.database_url = os.getenv("INTEGRATION_DB_URL", "postgres://postgres:postgres@localhost:5432/anomalies")
     settings.kafka_brokers_raw = os.getenv("INTEGRATION_KAFKA_BROKERS", "localhost:9092")
@@ -92,12 +96,16 @@ def integration_settings():
     settings.alerts_topic = f"alerts-it-{suffix}"
     settings.summaries_topic = f"summaries-it-{suffix}"
     settings.news_topic = f"news-it-{suffix}"
+    settings.news_enriched_topic = f"news-enriched-it-{suffix}"
+    settings.news_dlq_topic = f"news-dlq-it-{suffix}"
     settings.summary_consumer_group = f"summary-it-{suffix}"
+    settings.sentiment_sidecar_group = f"sentiment-it-{suffix}"
     settings.retry_max_attempts = 2
     settings.retry_backoff_base_sec = 0.1
     settings.retry_backoff_cap_sec = 1.0
     settings.late_price_tolerance_sec = 0
     settings.llm_provider = "stub"
+    settings.sentiment_provider = "stub"
     try:
         yield
     finally:

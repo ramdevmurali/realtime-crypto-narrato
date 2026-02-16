@@ -42,7 +42,7 @@ class FakeMsg:
 
 
 @pytest.mark.asyncio
-async def test_sentiment_sidecar_happy_path(monkeypatch):
+async def test_sentiment_sidecar_enriches_and_publishes(monkeypatch):
     pool = FakePool()
     producer = FakeProducer()
     consumer = FakeConsumer()
@@ -103,4 +103,41 @@ async def test_sentiment_sidecar_falls_back_on_model_error(monkeypatch):
     assert out["label"] is None
     assert out["confidence"] is None
     assert out["sentiment"] == pytest.approx(float(simple_sentiment(title)), rel=1e-6)
+    assert len(consumer.commits) == 1
+
+
+@pytest.mark.asyncio
+async def test_sentiment_sidecar_dlq_on_failure(monkeypatch):
+    pool = FakePool()
+    producer = FakeProducer()
+    consumer = FakeConsumer()
+
+    def fake_predict(texts):
+        return [(0.1, "neutral", 0.7) for _ in texts]
+
+    async def fail_upsert(*args, **kwargs):
+        raise RuntimeError("db fail")
+
+    async def no_retry(fn, *args, **kwargs):
+        kwargs.pop("log", None)
+        kwargs.pop("op", None)
+        kwargs.pop("max_attempts", None)
+        return await fn(*args, **kwargs)
+
+    monkeypatch.setattr(sentiment_sidecar.sentiment_model, "predict", fake_predict)
+    monkeypatch.setattr(sentiment_sidecar, "_upsert_headline", fail_upsert)
+    monkeypatch.setattr(sentiment_sidecar, "with_retries", no_retry)
+
+    msg = NewsMsg(
+        time=datetime(2026, 2, 1, 0, 0, tzinfo=timezone.utc),
+        title="headline",
+        url=None,
+        source="rss",
+        sentiment=0.0,
+    )
+    await sentiment_sidecar.process_sentiment_batch([FakeMsg(msg.to_bytes())], consumer, producer, pool, sentiment_sidecar.log)
+
+    assert len(producer.sent) == 1
+    topic, _ = producer.sent[0]
+    assert topic == settings.news_dlq_topic
     assert len(consumer.commits) == 1

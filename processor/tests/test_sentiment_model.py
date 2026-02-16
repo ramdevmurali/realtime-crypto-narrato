@@ -4,7 +4,7 @@ from processor.src import config as config_module
 from processor.src.services import sentiment_model
 
 
-def test_stub_provider_returns_scores(monkeypatch):
+def test_sentiment_model_stub_fallback(monkeypatch):
     monkeypatch.setattr(config_module.settings, "sentiment_provider", "stub")
     results = sentiment_model.predict(["bitcoin up", "market crashes"])
     assert len(results) == 2

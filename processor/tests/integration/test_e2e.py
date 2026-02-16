@@ -68,6 +68,15 @@ async def _wait_for_count(query: str, args, min_count: int, timeout_sec: int = 1
     raise AssertionError("timeout waiting for DB rows")
 
 
+async def _wait_for_calls(counter: dict, min_count: int, timeout_sec: int = 5):
+    deadline = time.monotonic() + timeout_sec
+    while time.monotonic() < deadline:
+        if counter["count"] >= min_count:
+            return
+        await asyncio.sleep(0.05)
+    raise AssertionError("timeout waiting for retry attempts")
+
+
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_e2e_happy_path(integration_services, integration_settings):
@@ -92,6 +101,7 @@ async def test_e2e_retry_path(integration_services, integration_settings, monkey
     group_id = f"processor-it-{uuid.uuid4().hex}"
     calls = {"count": 0}
     real_insert = pipeline_module.insert_price
+    original_retry_max = settings.retry_max_attempts
 
     async def flaky_insert(*args, **kwargs):
         calls["count"] += 1
@@ -100,14 +110,16 @@ async def test_e2e_retry_path(integration_services, integration_settings, monkey
         return await real_insert(*args, **kwargs)
 
     monkeypatch.setattr(pipeline_module, "insert_price", flaky_insert)
+    settings.retry_max_attempts = 2
     proc, task = await _start_processor(group_id)
     try:
         now = now_utc()
         price = PriceMsg(symbol="btcusdt", price=100.0, time=now)
         await _publish_prices([price])
         await _wait_for_count("SELECT count(*) FROM prices WHERE symbol=$1", ("btcusdt",), 1)
-        assert calls["count"] >= 2
+        await _wait_for_calls(calls, 2)
     finally:
+        settings.retry_max_attempts = original_retry_max
         await _stop_processor(proc, task)
 
 

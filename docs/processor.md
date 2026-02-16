@@ -124,7 +124,9 @@ curl -N 'http://localhost:8000/headlines/stream?limit=5&interval=2'
   `RETRY_BACKOFF_BASE_SEC`, `RETRY_BACKOFF_CAP_SEC`.
 - RSS dedupe: `RSS_SEEN_TTL_SEC`, `RSS_SEEN_MAX`.
 - Sentiment sidecar: `SENTIMENT_PROVIDER`, `SENTIMENT_MODEL_PATH`, `SENTIMENT_BATCH_SIZE`,
-  `SENTIMENT_MAX_LATENCY_MS`, `SENTIMENT_FALLBACK_ON_SLOW`,
+  `SENTIMENT_MAX_LATENCY_MS`, `SENTIMENT_FALLBACK_ON_SLOW`, `SENTIMENT_FAIL_FAST`,
   `SENTIMENT_SIDECAR_GROUP`, `NEWS_ENRICHED_TOPIC`, `NEWS_DLQ_TOPIC`.
 - Sentiment perf logs: `sentiment_infer_ms`, `batch_size`, `queue_lag_ms`, `fallback_used`.
   If `SENTIMENT_MAX_LATENCY_MS` is set, slow batches log `sentiment_batch_slow`.
+- Startup check: if `SENTIMENT_PROVIDER=onnx`, the sidecar attempts a model load on start.
+  Failure logs `sentiment_model_load_failed` and continues unless `SENTIMENT_FAIL_FAST=true`.

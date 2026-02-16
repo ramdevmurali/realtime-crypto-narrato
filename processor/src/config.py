@@ -97,6 +97,7 @@ class Settings(BaseSettings):
     sentiment_max_latency_ms: int | None = None
     sentiment_sidecar_group: str = "sentiment-sidecar"
     sentiment_fallback_on_slow: bool = False
+    sentiment_fail_fast: bool = False
 
     def __init__(self, **values):
         # allow CSV env overrides for symbols

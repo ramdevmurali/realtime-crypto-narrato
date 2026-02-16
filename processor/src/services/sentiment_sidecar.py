@@ -169,6 +169,18 @@ class SentimentSidecar(RuntimeService):
             extra={"brokers": settings.kafka_brokers, "topic": settings.news_topic},
         )
 
+        if settings.sentiment_provider == "onnx":
+            try:
+                sentiment_model.load_model()
+                self.log.info("sentiment_model_loaded", extra={"model_path": settings.sentiment_model_path})
+            except Exception as exc:
+                self.log.warning(
+                    "sentiment_model_load_failed",
+                    extra={"error": str(exc), "model_path": settings.sentiment_model_path},
+                )
+                if settings.sentiment_fail_fast:
+                    raise
+
         self._producer = AIOKafkaProducer(bootstrap_servers=settings.kafka_brokers)
         self._consumer = AIOKafkaConsumer(
             settings.news_topic,

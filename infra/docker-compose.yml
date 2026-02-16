@@ -112,6 +112,29 @@ services:
     networks:
       - streaming
 
+  sentiment-sidecar:
+    build: ../processor
+    container_name: sentiment-sidecar
+    depends_on:
+      - redpanda
+      - timescaledb
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      KAFKA_BROKERS: ${KAFKA_BROKERS}
+      SENTIMENT_PROVIDER: ${SENTIMENT_PROVIDER}
+      SENTIMENT_MODEL_PATH: ${SENTIMENT_MODEL_PATH}
+      SENTIMENT_BATCH_SIZE: ${SENTIMENT_BATCH_SIZE}
+      SENTIMENT_MAX_LATENCY_MS: ${SENTIMENT_MAX_LATENCY_MS}
+      SENTIMENT_SIDECAR_GROUP: ${SENTIMENT_SIDECAR_GROUP}
+      NEWS_TOPIC: ${NEWS_TOPIC}
+      NEWS_ENRICHED_TOPIC: ${NEWS_ENRICHED_TOPIC}
+      NEWS_DLQ_TOPIC: ${NEWS_DLQ_TOPIC}
+      PYTHONPATH: /app
+    working_dir: /app
+    command: python -m src.services.sentiment_sidecar
+    networks:
+      - streaming
+
   frontend:
     build: ../frontend
     container_name: frontend

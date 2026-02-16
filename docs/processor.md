@@ -71,7 +71,7 @@ Non-goals for now:
 ## How to run
 ```
 cd infra
-docker compose up -d redpanda timescaledb processor summary-sidecar backend   # containers use PYTHONPATH=/app
+docker compose up -d redpanda timescaledb processor summary-sidecar sentiment-sidecar backend   # containers use PYTHONPATH=/app
 ```
 Local/tests PYTHONPATH: `PYTHONPATH=processor/src:.`
 

@@ -86,6 +86,7 @@ PYTHONPATH=processor/src:. .venv/bin/python -m src.services.sentiment_sidecar
 Sentiment model assets (local ONNX):
 - Place model files under `models/finbert/`:
   `model.onnx`, plus tokenizer files (`tokenizer.json` or `vocab.txt`, `config.json`, etc.).
+- Model assets are not committed; download them separately and drop them in the folder.
 - Docker compose mounts `../models/finbert` into `/models/finbert`.
 - Set `SENTIMENT_MODEL_PATH=/models/finbert` (override in `.env` to switch models/paths).
 

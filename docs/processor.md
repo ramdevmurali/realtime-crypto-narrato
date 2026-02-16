@@ -29,6 +29,8 @@
 - `services/runtime.py` — startup config logging.
 - `services/health.py` — DB/Kafka health checks.
 - `services/summary_sidecar.py` — enriches alerts with LLM summaries from `summaries` topic.
+- `services/sentiment_model.py` — sentiment inference wrapper (stub/onnx).
+- `services/sentiment_sidecar.py` — enriches news sentiment and publishes `news-enriched`.
 - `streaming_core.py` — orchestrator + shared state.
 - `app.py` (entrypoint: `python -m src.app`) — thin entrypoint for `StreamProcessor`.
 
@@ -43,7 +45,7 @@ Note: legacy folders like `processor/src/models` and `processor/src/processor/se
 ## Alert path and summaries
 - Threshold check & cooldown happen in `domain/anomaly.py`; if tripped, the alert is persisted to Timescale and published to the `alerts` topic.
 - The processor no longer calls the LLM in the hot path. It publishes a summary-request message to the `summaries` topic with `{time, symbol, window, direction, ret, threshold, headline, sentiment}`. Alerts still carry the base/stub summary.
-- A future sidecar can consume `summaries`, call the configured LLM, and backfill richer summaries asynchronously.
+- The summary sidecar consumes `summaries`, calls the configured LLM, and backfills richer summaries asynchronously.
   - Sidecar knobs: `SUMMARY_CONSUMER_GROUP`, `SUMMARY_POLL_TIMEOUT_MS`, `SUMMARY_BATCH_MAX` (optional) control consumption behavior.
 
 ## Topic payloads (required fields)
@@ -53,6 +55,7 @@ Canonical payload models live in `processor/src/io/models/messages.py`.
 - `summaries` (summary-request): `time`, `symbol`, `window`, `direction`, `ret`, `threshold` (optional: `headline`, `sentiment`)
 - `alerts`: `time`, `symbol`, `window`, `direction`, `ret`, `threshold`, `summary` (optional: `headline`, `sentiment`)
 - `news-enriched`: same as `news` plus optional `label`, `confidence` (sentiment sidecar output)
+- `news-deadletter`: raw news messages that failed enrichment (poison-pill avoidance)
 
 Non-goals for now:
 - No schema registry (JSON/Avro) yet; models + tests enforce contracts.
@@ -63,6 +66,7 @@ Non-goals for now:
 - `domain/anomaly.py`: inputs — symbol, timestamp, metrics; outputs — Timescale `anomalies`, Kafka `alerts`, Kafka `summaries` request.
 - `streaming_core.py`: orchestrator; owns Kafka producer/consumer, `price_windows`, `last_alert`, `latest_headline`, DLQ counters.
 - `services/summary_sidecar.py`: inputs — Kafka `summaries` requests; outputs — Timescale `anomalies` summary upsert, Kafka `alerts` enriched.
+- `services/sentiment_sidecar.py`: inputs — Kafka `news`; outputs — Timescale `headlines` sentiment overwrite, Kafka `news-enriched`.
 
 ## How to run
 ```
@@ -71,6 +75,11 @@ docker compose up -d redpanda timescaledb processor summary-sidecar backend   # 
 ```
 Local/tests PYTHONPATH: `PYTHONPATH=processor/src:.`
 
+Sentiment sidecar (local):
+```
+PYTHONPATH=processor/src:. .venv/bin/python -m src.services.sentiment_sidecar
+```
+
 SSE stream for headlines (rudimentary sentiment):
 ```
 curl -N 'http://localhost:8000/headlines/stream?limit=5&interval=2'
@@ -78,7 +87,7 @@ curl -N 'http://localhost:8000/headlines/stream?limit=5&interval=2'
 
 ## Tests (processor)
 - Unit coverage for PriceWindow (prune/returns/vol), metrics propagation, anomaly triggers/rate limit/direction, ingest dedupe/news processing.
-- Integration coverage (Kafka + Timescale) for happy path, retry path, and DLQ routing (see `scripts/integration_test.sh`).
+- Integration coverage (Kafka + Timescale) for happy path, retry path, DLQ routing, and sentiment sidecar enrichment (see `scripts/integration_test.sh`).
 
 ## Window/Retention Policy
 - Window labels and durations are configured via `WINDOW_LABELS` (default `1m,5m,15m`).

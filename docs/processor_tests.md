@@ -36,12 +36,20 @@
   - price_ingest_task publishes one price from a mocked miniTicker websocket
 - `test_summary_sidecar.py`
   - Sidecar handler consumes summary request, calls LLM (stubbed), updates anomalies summary field, and republishes enriched alert to `alerts`.
+- `test_sentiment_model.py`
+  - Stub fallback for sentiment model wrapper
+  - ONNX path missing → fallback behavior
+- `test_sentiment_sidecar.py`
+  - Enriches news sentiment, upserts headlines, publishes `news-enriched`
+  - DLQ path on failure + commit
 - `test_config.py`
   - Config validation: window labels, llm provider, percentiles, positive values
 - `integration/test_e2e.py`
   - Kafka+DB happy path (prices -> metrics/anomalies)
   - Retry path (transient DB error -> eventual success)
   - DLQ path (invalid price -> deadletter + commit)
+- `integration/test_sentiment_sidecar.py`
+  - News message → headline sentiment overwrite + `news-enriched` publish
 
 ## How to run
 From repo root or `processor/`:
@@ -50,7 +58,7 @@ python3 -m pytest -q processor/tests
 ```
 Notes:
 - Uses pytest-asyncio for async cases.
-- No external services required; Kafka/DB are mocked.
+- Unit tests require no external services; Kafka/DB are mocked.
 
 ## Smoke test (unit + integration)
 From repo root:

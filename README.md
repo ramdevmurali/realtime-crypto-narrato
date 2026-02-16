@@ -2,7 +2,7 @@
 
 Repo scaffold only. Components:
 - backend/ : FastAPI service (to-be-built)
-- processor/ : streaming metrics/anomaly worker (built)
+- processor/ : streaming metrics/anomaly worker + sidecars (summary + sentiment)
 - frontend/ : Next.js dashboard (to-be-built)
 - public/ : static assets
 - scripts/ : helper scripts

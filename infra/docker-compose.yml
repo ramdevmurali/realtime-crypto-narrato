@@ -130,6 +130,8 @@ services:
       NEWS_ENRICHED_TOPIC: ${NEWS_ENRICHED_TOPIC}
       NEWS_DLQ_TOPIC: ${NEWS_DLQ_TOPIC}
       PYTHONPATH: /app
+    volumes:
+      - ../models/finbert:/models/finbert
     working_dir: /app
     command: python -m src.services.sentiment_sidecar
     networks:

@@ -1,0 +1,198 @@
+import asyncio
+import contextlib
+import signal
+from typing import Iterable, List, Tuple
+
+import asyncpg
+from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
+from aiokafka.structs import TopicPartition, OffsetAndMetadata
+
+from ..config import settings
+from ..logging_config import get_logger
+from ..runtime_interface import RuntimeService
+from ..utils import simple_sentiment, with_retries
+from ..io.models.messages import NewsMsg, EnrichedNewsMsg
+from . import sentiment_model
+
+
+log = get_logger(__name__)
+
+
+async def _commit_message(consumer, msg, log):
+    tp = TopicPartition(msg.topic, msg.partition)
+    try:
+        await consumer.commit({tp: OffsetAndMetadata(msg.offset + 1, None)})
+    except Exception as exc:
+        log.warning("news_commit_failed", extra={"error": str(exc), "offset": msg.offset})
+
+
+async def _send_dlq(producer, payload: bytes, log):
+    try:
+        await with_retries(
+            producer.send_and_wait,
+            settings.news_dlq_topic,
+            payload,
+            log=log,
+            op="send_news_dlq",
+        )
+    except Exception as exc:
+        log.error("news_dlq_failed", extra={"error": str(exc)})
+
+
+async def _upsert_headline(pool, payload: NewsMsg, sentiment: float):
+    await pool.execute(
+        """
+        INSERT INTO headlines (time, title, source, url, sentiment)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (time, title) DO UPDATE
+        SET sentiment = EXCLUDED.sentiment
+        """,
+        payload.time,
+        payload.title,
+        payload.source,
+        payload.url,
+        sentiment,
+    )
+
+
+def _fallback_results(titles: List[str]) -> List[Tuple[float, None, None]]:
+    return [(float(simple_sentiment(title)), None, None) for title in titles]
+
+
+async def process_sentiment_batch(messages: Iterable, consumer, producer, pool, log):
+    parsed: List[Tuple[object, NewsMsg]] = []
+    for msg in messages:
+        try:
+            payload = NewsMsg.model_validate_json(msg.value)
+        except Exception as exc:
+            log.warning("news_message_decode_failed", extra={"error": str(exc)})
+            await _send_dlq(producer, msg.value, log)
+            await _commit_message(consumer, msg, log)
+            continue
+        parsed.append((msg, payload))
+
+    if not parsed:
+        return
+
+    titles = [payload.title for _, payload in parsed]
+    try:
+        results = sentiment_model.predict(titles)
+    except Exception:
+        results = _fallback_results(titles)
+
+    if len(results) != len(parsed):
+        log.warning(
+            "sentiment_result_mismatch",
+            extra={"expected": len(parsed), "actual": len(results)},
+        )
+        results = _fallback_results(titles)
+
+    for (msg, payload), (score, label, confidence) in zip(parsed, results):
+        try:
+            await with_retries(
+                _upsert_headline,
+                pool,
+                payload,
+                score,
+                log=log,
+                op="upsert_headline",
+            )
+            enriched = EnrichedNewsMsg(
+                time=payload.time,
+                title=payload.title,
+                url=payload.url,
+                source=payload.source,
+                sentiment=score,
+                label=label,
+                confidence=confidence,
+            )
+            await with_retries(
+                producer.send_and_wait,
+                settings.news_enriched_topic,
+                enriched.to_bytes(),
+                log=log,
+                op="send_enriched_news",
+            )
+            await _commit_message(consumer, msg, log)
+        except Exception as exc:
+            log.warning("sentiment_handle_failed", extra={"error": str(exc)})
+            await _send_dlq(producer, msg.value, log)
+            await _commit_message(consumer, msg, log)
+
+
+class SentimentSidecar(RuntimeService):
+    def __init__(self):
+        self.log = log
+        self._stop_event = asyncio.Event()
+        self._stopped = False
+        self._producer: AIOKafkaProducer | None = None
+        self._consumer: AIOKafkaConsumer | None = None
+        self._pool: asyncpg.Pool | None = None
+
+    def request_stop(self) -> None:
+        self._stop_event.set()
+
+    async def start(self) -> None:
+        loop = asyncio.get_running_loop()
+        self.log.info(
+            "sentiment_sidecar_start",
+            extra={"brokers": settings.kafka_brokers, "topic": settings.news_topic},
+        )
+
+        self._producer = AIOKafkaProducer(bootstrap_servers=settings.kafka_brokers, loop=loop)
+        self._consumer = AIOKafkaConsumer(
+            settings.news_topic,
+            bootstrap_servers=settings.kafka_brokers,
+            loop=loop,
+            enable_auto_commit=False,
+            auto_offset_reset="latest",
+            group_id=settings.sentiment_sidecar_group,
+        )
+
+        self._pool = await asyncpg.create_pool(dsn=settings.database_url)
+        await self._producer.start()
+        await self._consumer.start()
+
+        try:
+            while not self._stop_event.is_set():
+                msg_batch = await self._consumer.getmany(
+                    timeout_ms=settings.summary_poll_timeout_ms,
+                    max_records=settings.sentiment_batch_size,
+                )
+                messages = [msg for batch in msg_batch.values() for msg in batch]
+                if messages:
+                    await process_sentiment_batch(messages, self._consumer, self._producer, self._pool, self.log)
+                await asyncio.sleep(0)  # yield
+        finally:
+            await self._shutdown()
+
+    async def stop(self) -> None:
+        self._stop_event.set()
+        await self._shutdown()
+
+    async def _shutdown(self) -> None:
+        if self._stopped:
+            return
+        self._stopped = True
+        if self._consumer:
+            with contextlib.suppress(Exception):
+                await self._consumer.stop()
+        if self._producer:
+            with contextlib.suppress(Exception):
+                await self._producer.stop()
+        if self._pool:
+            with contextlib.suppress(Exception):
+                await self._pool.close()
+        self.log.info("sentiment_sidecar_stop")
+
+
+async def main():
+    loop = asyncio.get_running_loop()
+    sidecar = SentimentSidecar()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, sidecar.request_stop)
+    await sidecar.start()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

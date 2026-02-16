@@ -23,6 +23,19 @@ class NewsMsg(BaseModel):
         return self.model_dump_json().encode()
 
 
+class EnrichedNewsMsg(BaseModel):
+    time: AwareDatetime
+    title: str
+    url: Optional[str] = None
+    source: str
+    sentiment: float
+    label: Optional[str] = None
+    confidence: Optional[float] = None
+
+    def to_bytes(self) -> bytes:
+        return self.model_dump_json().encode()
+
+
 class SummaryRequestMsg(BaseModel):
     time: str
     symbol: str

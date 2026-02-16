@@ -2,7 +2,7 @@ import json
 from datetime import datetime, timezone
 import pytest
 
-from processor.src.io.models.messages import PriceMsg, NewsMsg, SummaryRequestMsg, AlertMsg
+from processor.src.io.models.messages import PriceMsg, NewsMsg, EnrichedNewsMsg, SummaryRequestMsg, AlertMsg
 
 
 def test_price_msg_valid():
@@ -19,6 +19,40 @@ def test_news_msg_valid():
         sentiment=0.1,
     )
     assert msg.title == "headline"
+
+
+def test_enriched_news_msg_valid():
+    msg = EnrichedNewsMsg(
+        time=datetime(2026, 2, 1, 0, 0, tzinfo=timezone.utc),
+        title="headline",
+        url="http://x",
+        source="rss",
+        sentiment=0.1,
+        label="positive",
+        confidence=0.92,
+    )
+    assert msg.label == "positive"
+    assert msg.confidence == 0.92
+
+
+def test_enriched_news_msg_optional_fields():
+    msg = EnrichedNewsMsg(
+        time=datetime(2026, 2, 1, 0, 0, tzinfo=timezone.utc),
+        title="headline",
+        source="rss",
+        sentiment=-0.2,
+    )
+    assert msg.label is None
+    assert msg.confidence is None
+
+
+def test_enriched_news_msg_missing_field_fails():
+    with pytest.raises(Exception):
+        EnrichedNewsMsg(
+            time=datetime(2026, 2, 1, 0, 0, tzinfo=timezone.utc),
+            source="rss",
+            sentiment=0.1,
+        )
 
 
 def test_summary_request_msg_valid():

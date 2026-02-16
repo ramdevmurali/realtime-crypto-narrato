@@ -81,13 +81,21 @@ class Settings(BaseSettings):
 
     price_topic: str = "prices"
     news_topic: str = "news"
+    news_enriched_topic: str = "news-enriched"
     alerts_topic: str = "alerts"
     summaries_topic: str = "summaries"
     summaries_dlq_topic: str = "summaries-deadletter"
     price_dlq_topic: str = "prices-deadletter"
+    news_dlq_topic: str = "news-deadletter"
     summary_consumer_group: str = "summary-sidecar"
     summary_poll_timeout_ms: int = 500
     summary_batch_max: int | None = None
+
+    sentiment_provider: str = "stub"  # stub|onnx
+    sentiment_model_path: str | None = None
+    sentiment_batch_size: int = 16
+    sentiment_max_latency_ms: int | None = None
+    sentiment_sidecar_group: str = "sentiment-sidecar"
 
     def __init__(self, **values):
         # allow CSV env overrides for symbols
@@ -128,6 +136,7 @@ class Settings(BaseSettings):
         "retry_max_attempts",
         "retry_backoff_base_sec",
         "retry_backoff_cap_sec",
+        "sentiment_batch_size",
     )
     @classmethod
     def _positive(cls, v):
@@ -147,6 +156,22 @@ class Settings(BaseSettings):
     def _provider_allowed(cls, v):
         if v not in {"stub", "openai", "google"}:
             raise ValueError("llm_provider must be one of: stub, openai, google")
+        return v
+
+    @field_validator("sentiment_provider")
+    @classmethod
+    def _sentiment_provider_allowed(cls, v):
+        if v not in {"stub", "onnx"}:
+            raise ValueError("sentiment_provider must be one of: stub, onnx")
+        return v
+
+    @field_validator("sentiment_max_latency_ms")
+    @classmethod
+    def _positive_optional(cls, v):
+        if v is None:
+            return v
+        if v <= 0:
+            raise ValueError("must be positive")
         return v
 
     @model_validator(mode="after")

@@ -52,6 +52,7 @@ Canonical payload models live in `processor/src/io/models/messages.py`.
 - `news`: `time`, `title`, `source`, `sentiment` (optional: `url`)
 - `summaries` (summary-request): `time`, `symbol`, `window`, `direction`, `ret`, `threshold` (optional: `headline`, `sentiment`)
 - `alerts`: `time`, `symbol`, `window`, `direction`, `ret`, `threshold`, `summary` (optional: `headline`, `sentiment`)
+- `news-enriched`: same as `news` plus optional `label`, `confidence` (sentiment sidecar output)
 
 Non-goals for now:
 - No schema registry (JSON/Avro) yet; models + tests enforce contracts.
@@ -96,3 +97,5 @@ curl -N 'http://localhost:8000/headlines/stream?limit=5&interval=2'
   `PRICE_BACKOFF_*`, `NEWS_BACKOFF_*`, `RETRY_MAX_ATTEMPTS`,
   `RETRY_BACKOFF_BASE_SEC`, `RETRY_BACKOFF_CAP_SEC`.
 - RSS dedupe: `RSS_SEEN_TTL_SEC`, `RSS_SEEN_MAX`.
+- Sentiment sidecar: `SENTIMENT_PROVIDER`, `SENTIMENT_MODEL_PATH`, `SENTIMENT_BATCH_SIZE`,
+  `SENTIMENT_MAX_LATENCY_MS`, `SENTIMENT_SIDECAR_GROUP`, `NEWS_ENRICHED_TOPIC`, `NEWS_DLQ_TOPIC`.

@@ -57,6 +57,9 @@ Canonical payload models live in `processor/src/io/models/messages.py`.
 - `news-enriched`: same as `news` plus optional `label`, `confidence` (sentiment sidecar output)
 - `news-deadletter`: raw news messages that failed enrichment (poison-pill avoidance)
 
+Sentiment fallback behavior: if the sentiment sidecar is down or errors, the raw `news` topic remains valid
+and carries the stub sentiment; consumers can continue using `news` until `news-enriched` is available.
+
 Non-goals for now:
 - No schema registry (JSON/Avro) yet; models + tests enforce contracts.
 

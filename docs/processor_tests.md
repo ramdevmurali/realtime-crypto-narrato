@@ -42,6 +42,7 @@
 - `test_sentiment_sidecar.py`
   - Enriches news sentiment, upserts headlines, publishes `news-enriched`
   - DLQ path on failure + commit
+  - `news-enriched` is produced by the sentiment sidecar (not the processor)
 - `test_config.py`
   - Config validation: window labels, llm provider, percentiles, positive values
 - `integration/test_e2e.py`

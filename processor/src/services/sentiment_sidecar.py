@@ -133,17 +133,15 @@ class SentimentSidecar(RuntimeService):
         self._stop_event.set()
 
     async def start(self) -> None:
-        loop = asyncio.get_running_loop()
         self.log.info(
             "sentiment_sidecar_start",
             extra={"brokers": settings.kafka_brokers, "topic": settings.news_topic},
         )
 
-        self._producer = AIOKafkaProducer(bootstrap_servers=settings.kafka_brokers, loop=loop)
+        self._producer = AIOKafkaProducer(bootstrap_servers=settings.kafka_brokers)
         self._consumer = AIOKafkaConsumer(
             settings.news_topic,
             bootstrap_servers=settings.kafka_brokers,
-            loop=loop,
             enable_auto_commit=False,
             auto_offset_reset="latest",
             group_id=settings.sentiment_sidecar_group,

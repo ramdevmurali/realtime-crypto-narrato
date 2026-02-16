@@ -80,6 +80,13 @@ Sentiment sidecar (local):
 PYTHONPATH=processor/src:. .venv/bin/python -m src.services.sentiment_sidecar
 ```
 
+Replay recent headlines into Kafka (for sidecar testing):
+```
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/anomalies \
+KAFKA_BROKERS_RAW=localhost:9092 \
+PYTHONPATH=processor/src:. .venv/bin/python scripts/replay_headlines.py --since-hours 24 --limit 50
+```
+
 SSE stream for headlines (rudimentary sentiment):
 ```
 curl -N 'http://localhost:8000/headlines/stream?limit=5&interval=2'

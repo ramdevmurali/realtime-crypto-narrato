@@ -1,6 +1,7 @@
 import asyncio
 import contextlib
 import signal
+import time
 from typing import Iterable, List, Tuple
 
 import asyncpg
@@ -10,7 +11,7 @@ from aiokafka.structs import TopicPartition, OffsetAndMetadata
 from ..config import settings
 from ..logging_config import get_logger
 from ..runtime_interface import RuntimeService
-from ..utils import simple_sentiment, with_retries
+from ..utils import simple_sentiment, with_retries, now_utc
 from ..io.models.messages import NewsMsg, EnrichedNewsMsg
 from . import sentiment_model
 
@@ -75,10 +76,29 @@ async def process_sentiment_batch(messages: Iterable, consumer, producer, pool, 
         return
 
     titles = [payload.title for _, payload in parsed]
+    now = now_utc()
+    lag_values = [max(0.0, (now - payload.time).total_seconds() * 1000) for _, payload in parsed]
+    queue_lag_ms = max(lag_values) if lag_values else 0.0
+    if settings.sentiment_batch_size and len(parsed) >= settings.sentiment_batch_size:
+        log.warning("sentiment_batch_maxed", extra={"batch_size": len(parsed), "queue_lag_ms": queue_lag_ms})
+
+    fallback_used = False
+    infer_start = time.perf_counter()
     try:
         results = sentiment_model.predict(titles)
     except Exception:
         results = _fallback_results(titles)
+        fallback_used = True
+    infer_ms = (time.perf_counter() - infer_start) * 1000
+
+    if settings.sentiment_max_latency_ms and infer_ms > settings.sentiment_max_latency_ms:
+        log.warning(
+            "sentiment_batch_slow",
+            extra={"sentiment_infer_ms": infer_ms, "batch_size": len(parsed), "queue_lag_ms": queue_lag_ms},
+        )
+        if settings.sentiment_fallback_on_slow:
+            results = _fallback_results(titles)
+            fallback_used = True
 
     if len(results) != len(parsed):
         log.warning(
@@ -86,6 +106,17 @@ async def process_sentiment_batch(messages: Iterable, consumer, producer, pool, 
             extra={"expected": len(parsed), "actual": len(results)},
         )
         results = _fallback_results(titles)
+        fallback_used = True
+
+    log.info(
+        "sentiment_batch_processed",
+        extra={
+            "batch_size": len(parsed),
+            "sentiment_infer_ms": infer_ms,
+            "queue_lag_ms": queue_lag_ms,
+            "fallback_used": fallback_used,
+        },
+    )
 
     for (msg, payload), (score, label, confidence) in zip(parsed, results):
         try:

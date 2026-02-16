@@ -7,3 +7,5 @@ TODO.md
 .TODO.md
 .venv/
 .DS_Store
+models/finbert/*
+!models/finbert/README.md

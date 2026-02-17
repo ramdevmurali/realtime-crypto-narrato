@@ -3,6 +3,7 @@ import pytest
 from datetime import datetime
 
 from processor.src import app as app_module
+from processor.src import config as config_module
 from processor.src.services import price_pipeline as pipeline_module
 from processor.src.services import price_consumer as consumer_module
 
@@ -85,6 +86,28 @@ def test_handle_price_message_valid(monkeypatch):
     action, data = consumer_module.handle_price_message(proc, msg)
     assert action == "process"
     assert data["symbol"] == "btcusdt"
+
+
+def test_handle_price_message_allows_within_tolerance(monkeypatch):
+    monkeypatch.setattr(config_module.settings, "late_price_tolerance_sec", 5)
+    proc = app_module.StreamProcessor()
+    last_ts = datetime.fromisoformat("2026-01-27T12:00:00+00:00")
+    proc.last_price_ts["btcusdt"] = last_ts
+    payload = json.dumps({"symbol": "btcusdt", "price": 100.0, "time": "2026-01-27T11:59:59Z"}).encode()
+    msg = FakeMsg(payload)
+    action, _ = consumer_module.handle_price_message(proc, msg)
+    assert action == "process"
+
+
+def test_handle_price_message_allows_equal_timestamp(monkeypatch):
+    monkeypatch.setattr(config_module.settings, "late_price_tolerance_sec", 5)
+    proc = app_module.StreamProcessor()
+    last_ts = datetime.fromisoformat("2026-01-27T12:00:00+00:00")
+    proc.last_price_ts["btcusdt"] = last_ts
+    payload = json.dumps({"symbol": "btcusdt", "price": 100.0, "time": "2026-01-27T12:00:00Z"}).encode()
+    msg = FakeMsg(payload)
+    action, _ = consumer_module.handle_price_message(proc, msg)
+    assert action == "process"
 
 
 @pytest.mark.asyncio

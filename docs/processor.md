@@ -125,6 +125,7 @@ curl -N 'http://localhost:8000/headlines/stream?limit=5&interval=2'
   `RETRY_BACKOFF_BASE_SEC`, `RETRY_BACKOFF_CAP_SEC`,
   `RETRY_JITTER_MIN`, `RETRY_JITTER_MAX`.
 - Kafka consumer offset reset: `KAFKA_AUTO_OFFSET_RESET`.
+- Processor consumer group: `PROCESSOR_CONSUMER_GROUP`.
 - Metrics tuning: `EWMA_Z_CAP`, `PERCENTILE_MIN_SAMPLES`.
 - Alert logging: `ALERT_LOG_EVERY`.
 - Summary sidecar: `SUMMARY_LLM_CONCURRENCY`.

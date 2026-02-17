@@ -43,7 +43,7 @@ class StreamProcessor(RuntimeService):
         self.consumer = AIOKafkaConsumer(
             settings.price_topic,
             bootstrap_servers=settings.kafka_brokers,
-            group_id="processor",
+            group_id=settings.processor_consumer_group,
             enable_auto_commit=False,
             auto_offset_reset=settings.kafka_auto_offset_reset,
         )

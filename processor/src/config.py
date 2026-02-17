@@ -101,6 +101,7 @@ class Settings(BaseSettings):
     summaries_dlq_topic: str = "summaries-deadletter"
     price_dlq_topic: str = "prices-deadletter"
     news_dlq_topic: str = "news-deadletter"
+    processor_consumer_group: str = "processor"
     summary_consumer_group: str = "summary-sidecar"
     summary_poll_timeout_ms: int = 500
     summary_batch_max: int | None = None

@@ -98,6 +98,9 @@ class Settings(BaseSettings):
     sentiment_sidecar_group: str = "sentiment-sidecar"
     sentiment_fallback_on_slow: bool = False
     sentiment_fail_fast: bool = False
+    sentiment_light_runtime: bool = False
+    sentiment_metrics_host: str = "0.0.0.0"
+    sentiment_metrics_port: int | None = 9101
 
     def __init__(self, **values):
         # allow CSV env overrides for symbols
@@ -170,6 +173,15 @@ class Settings(BaseSettings):
     @field_validator("sentiment_max_latency_ms")
     @classmethod
     def _positive_optional(cls, v):
+        if v is None:
+            return v
+        if v <= 0:
+            raise ValueError("must be positive")
+        return v
+
+    @field_validator("sentiment_metrics_port")
+    @classmethod
+    def _positive_optional_metrics(cls, v):
         if v is None:
             return v
         if v <= 0:

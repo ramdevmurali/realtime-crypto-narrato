@@ -48,7 +48,8 @@ Terminology note: the `metrics` table stores **price metrics** (returns/vol/z/pe
 
 ## Alert path and summaries
 - Threshold check & cooldown happen in `domain/anomaly.py`; if tripped, the alert is persisted to Timescale (in `anomalies`) and published to the Kafka `alerts` topic. These represent the same event across DB and Kafka.
-- The processor no longer calls the LLM in the hot path. It publishes a summary-request message to the `summaries` topic with `{time, symbol, window, direction, ret, threshold, headline, sentiment}`. Alerts still carry the base/stub summary.
+- The processor no longer calls the LLM in the hot path. It publishes a **summary request** message to the `summaries` topic with `{time, symbol, window, direction, ret, threshold, headline, sentiment}`. Alerts still carry the base/stub summary.
+  - Note: the Kafka `summaries` topic contains **requests**, not completed summaries.
 - The summary sidecar consumes `summaries`, calls the configured LLM, and backfills richer summaries asynchronously.
   - Sidecar knobs: `SUMMARY_CONSUMER_GROUP`, `SUMMARY_POLL_TIMEOUT_MS`, `SUMMARY_BATCH_MAX` (optional) control consumption behavior.
 
@@ -58,6 +59,7 @@ Canonical payload models live in `processor/src/io/models/messages.py`.
 - `news`: `time`, `title`, `source`, `sentiment` (optional: `url`)
   - Note: `news` is the raw headline feed; it is persisted to the `headlines` table and represented by `NewsMsg` / `latest_headline` in code.
 - `summaries` (summary-request): `time`, `symbol`, `window`, `direction`, `ret`, `threshold` (optional: `headline`, `sentiment`)
+  - Note: this topic carries **summary requests**, not completed summaries.
 - `alerts`: `time`, `symbol`, `window`, `direction`, `ret`, `threshold`, `summary` (optional: `headline`, `sentiment`)
 - `news-enriched`: same as `news` plus optional `label`, `confidence` (sentiment sidecar output)
 - `news-deadletter`: raw news messages that failed enrichment (poison-pill avoidance)

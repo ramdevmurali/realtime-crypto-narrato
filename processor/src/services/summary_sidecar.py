@@ -1,7 +1,5 @@
 import asyncio
-import contextlib
 import json
-import signal
 import asyncpg
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 from aiokafka.structs import TopicPartition, OffsetAndMetadata
@@ -11,23 +9,16 @@ from ..logging_config import get_logger
 from ..runtime_interface import RuntimeService
 from ..utils import llm_summarize, with_retries
 from ..io.models.messages import SummaryRequestMsg, AlertMsg
+from .sidecar_runtime import SidecarRuntime
 
 
 log = get_logger(__name__)
 _llm_semaphore = asyncio.Semaphore(2)
 
 
-class SummarySidecar(RuntimeService):
+class SummarySidecar(SidecarRuntime, RuntimeService):
     def __init__(self):
-        self.log = log
-        self._stop_event = asyncio.Event()
-        self._stopped = False
-        self._producer: AIOKafkaProducer | None = None
-        self._consumer: AIOKafkaConsumer | None = None
-        self._pool: asyncpg.Pool | None = None
-
-    def request_stop(self) -> None:
-        self._stop_event.set()
+        super().__init__(log, "summary_sidecar_stop")
 
     async def start(self) -> None:
         self.log.info(
@@ -49,7 +40,7 @@ class SummarySidecar(RuntimeService):
         await self._consumer.start()
 
         try:
-            while not self._stop_event.is_set():
+            while not self.should_stop():
                 msg_batch = await self._consumer.getmany(
                     timeout_ms=settings.summary_poll_timeout_ms,
                     max_records=settings.summary_batch_max,
@@ -61,31 +52,10 @@ class SummarySidecar(RuntimeService):
         finally:
             await self._shutdown()
 
-    async def stop(self) -> None:
-        self._stop_event.set()
-        await self._shutdown()
-
-    async def _shutdown(self) -> None:
-        if self._stopped:
-            return
-        self._stopped = True
-        if self._consumer:
-            with contextlib.suppress(Exception):
-                await self._consumer.stop()
-        if self._producer:
-            with contextlib.suppress(Exception):
-                await self._producer.stop()
-        if self._pool:
-            with contextlib.suppress(Exception):
-                await self._pool.close()
-        self.log.info("summary_sidecar_stop")
-
 
 async def main():
-    loop = asyncio.get_running_loop()
     sidecar = SummarySidecar()
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, sidecar.request_stop)
+    sidecar.install_signal_handlers()
     await sidecar.start()
 
 

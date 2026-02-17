@@ -1,6 +1,4 @@
 import asyncio
-import contextlib
-import signal
 import time
 from typing import Iterable, List, Tuple
 
@@ -14,6 +12,7 @@ from ..runtime_interface import RuntimeService
 from ..utils import simple_sentiment, with_retries, now_utc
 from ..io.models.messages import NewsMsg, EnrichedNewsMsg
 from . import sentiment_model
+from .sidecar_runtime import SidecarRuntime
 
 
 log = get_logger(__name__)
@@ -151,17 +150,9 @@ async def process_sentiment_batch(messages: Iterable, consumer, producer, pool, 
             await _commit_message(consumer, msg, log)
 
 
-class SentimentSidecar(RuntimeService):
+class SentimentSidecar(SidecarRuntime, RuntimeService):
     def __init__(self):
-        self.log = log
-        self._stop_event = asyncio.Event()
-        self._stopped = False
-        self._producer: AIOKafkaProducer | None = None
-        self._consumer: AIOKafkaConsumer | None = None
-        self._pool: asyncpg.Pool | None = None
-
-    def request_stop(self) -> None:
-        self._stop_event.set()
+        super().__init__(log, "sentiment_sidecar_stop")
 
     async def start(self) -> None:
         self.log.info(
@@ -195,7 +186,7 @@ class SentimentSidecar(RuntimeService):
         await self._consumer.start()
 
         try:
-            while not self._stop_event.is_set():
+            while not self.should_stop():
                 msg_batch = await self._consumer.getmany(
                     timeout_ms=settings.summary_poll_timeout_ms,
                     max_records=settings.sentiment_batch_size,
@@ -207,31 +198,10 @@ class SentimentSidecar(RuntimeService):
         finally:
             await self._shutdown()
 
-    async def stop(self) -> None:
-        self._stop_event.set()
-        await self._shutdown()
-
-    async def _shutdown(self) -> None:
-        if self._stopped:
-            return
-        self._stopped = True
-        if self._consumer:
-            with contextlib.suppress(Exception):
-                await self._consumer.stop()
-        if self._producer:
-            with contextlib.suppress(Exception):
-                await self._producer.stop()
-        if self._pool:
-            with contextlib.suppress(Exception):
-                await self._pool.close()
-        self.log.info("sentiment_sidecar_stop")
-
 
 async def main():
-    loop = asyncio.get_running_loop()
     sidecar = SentimentSidecar()
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, sidecar.request_stop)
+    sidecar.install_signal_handlers()
     await sidecar.start()
 
 

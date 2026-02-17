@@ -3,6 +3,7 @@ import json
 import pytest
 
 from processor.src.services import summary_sidecar  # type: ignore
+from processor.src.metrics import get_metrics
 from processor.src.config import settings  # type: ignore
 
 
@@ -182,3 +183,33 @@ async def test_process_summary_record_sends_dlq_on_failure(monkeypatch):
     topic, _ = producer.sent[0]
     assert topic == settings.summaries_dlq_topic
     assert len(consumer.commits) == 1
+
+
+@pytest.mark.asyncio
+async def test_summary_dlq_failure_increments_metric(monkeypatch):
+    payload = {
+        "time": "2026-01-27T12:00:00+00:00",
+        "symbol": "btcusdt",
+        "window": "1m",
+        "direction": "up",
+        "ret": 0.07,
+        "threshold": 0.05,
+        "headline": "headline",
+        "sentiment": 0.1,
+    }
+
+    class FailingProducer(FakeProducer):
+        async def send_and_wait(self, topic, payload):
+            raise RuntimeError("dlq fail")
+
+    metrics = get_metrics()
+    before = metrics.snapshot()["counters"].get("summary_dlq_failed", 0)
+    ok, consumer, producer, pool = await _run_summary_record(
+        payload,
+        monkeypatch,
+        fail_publish=True,
+        producer=FailingProducer(),
+    )
+    assert ok is False
+    after = metrics.snapshot()["counters"].get("summary_dlq_failed", 0)
+    assert after == before + 1

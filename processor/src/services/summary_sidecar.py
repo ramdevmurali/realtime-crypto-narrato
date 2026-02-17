@@ -6,6 +6,7 @@ from aiokafka.structs import TopicPartition, OffsetAndMetadata
 from ..config import settings
 from ..logging_config import get_logger
 from ..runtime_interface import RuntimeService
+from ..metrics import get_metrics
 from ..io.db import init_pool
 from ..utils import llm_summarize, with_retries
 from ..io.models.messages import SummaryRequestMsg, AlertMsg
@@ -171,7 +172,9 @@ async def process_summary_record(msg, consumer, producer, pool, log, semaphore: 
                 op="send_summary_dlq",
             )
         except Exception as dlq_exc:
-            log.error("summary_dlq_failed", extra={"error": str(dlq_exc)})
+            metrics = get_metrics()
+            metrics.inc("summary_dlq_failed")
+            log.error("summary_dlq_failed", extra={"error": str(dlq_exc), "offset": msg.offset})
         await _commit_message(consumer, msg, log)
         return False
 

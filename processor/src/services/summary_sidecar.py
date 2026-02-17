@@ -59,35 +59,23 @@ async def main():
     await sidecar.start()
 
 
-async def persist_and_publish_summary(raw_value: bytes, producer, pool, log):
-    payload = SummaryRequestMsg.model_validate_json(raw_value).model_dump()
-    log.info("summary_request_received", extra=payload)
-
+async def compute_summary(payload, llm_provider: str, api_key: str | None) -> str:
     # Call LLM (with lightweight concurrency cap)
     async with _llm_semaphore:
-        api_key = None
-        if settings.llm_provider == "openai":
-            api_key = settings.openai_api_key
-        elif settings.llm_provider == "google":
-            api_key = settings.google_api_key
+        return await asyncio.to_thread(
+            llm_summarize,
+            llm_provider,
+            api_key,
+            payload["symbol"],
+            payload["window"],
+            payload["ret"],
+            payload.get("headline"),
+            payload.get("sentiment"),
+        )
 
-        try:
-            summary = await asyncio.to_thread(
-                llm_summarize,
-                settings.llm_provider,
-                api_key,
-                payload["symbol"],
-                payload["window"],
-                payload["ret"],
-                payload.get("headline"),
-                payload.get("sentiment"),
-            )
-        except Exception as exc:
-            log.exception(
-                "summary_llm_error",
-                extra={"error": str(exc), "symbol": payload.get("symbol"), "window": payload.get("window")},
-            )
-            raise
+
+async def persist_and_publish_summary(payload, summary: str, producer, pool, log):
+    log.info("summary_request_received", extra=payload)
 
     # Upsert anomalies table with enriched summary
     await pool.execute(
@@ -134,9 +122,26 @@ async def _commit_message(consumer, msg, log):
 
 async def process_summary_record(msg, consumer, producer, pool, log):
     try:
+        payload = SummaryRequestMsg.model_validate_json(msg.value).model_dump()
+        api_key = None
+        if settings.llm_provider == "openai":
+            api_key = settings.openai_api_key
+        elif settings.llm_provider == "google":
+            api_key = settings.google_api_key
+
+        try:
+            summary = await compute_summary(payload, settings.llm_provider, api_key)
+        except Exception as exc:
+            log.exception(
+                "summary_llm_error",
+                extra={"error": str(exc), "symbol": payload.get("symbol"), "window": payload.get("window")},
+            )
+            raise
+
         await with_retries(
             persist_and_publish_summary,
-            msg.value,
+            payload,
+            summary,
             producer,
             pool,
             log,

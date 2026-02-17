@@ -23,11 +23,28 @@ class FakeProducer:
 
 
 @pytest.mark.asyncio
-async def test_persist_and_publish_summary(monkeypatch):
-    # Stub llm to return deterministic text
+async def test_compute_summary(monkeypatch):
     monkeypatch.setattr(summary_sidecar, "llm_summarize", lambda *args, **kwargs: "LLM SUMMARY")
-    # Ensure semaphore allows the call
     summary_sidecar._llm_semaphore = summary_sidecar.asyncio.Semaphore(1)
+
+    payload = {
+        "time": "2026-01-27T12:00:00+00:00",
+        "symbol": "btcusdt",
+        "window": "1m",
+        "direction": "up",
+        "ret": 0.07,
+        "threshold": 0.05,
+        "headline": "headline",
+        "sentiment": 0.1,
+    }
+
+    summary = await summary_sidecar.compute_summary(payload, "stub", None)
+    assert summary == "LLM SUMMARY"
+
+
+@pytest.mark.asyncio
+async def test_persist_and_publish_summary(monkeypatch):
+    summary = "LLM SUMMARY"
 
     pool = FakePool()
     producer = FakeProducer()
@@ -44,7 +61,7 @@ async def test_persist_and_publish_summary(monkeypatch):
         "sentiment": 0.1,
     }
 
-    await summary_sidecar.persist_and_publish_summary(json.dumps(payload).encode(), producer, pool, log)
+    await summary_sidecar.persist_and_publish_summary(payload, summary, producer, pool, log)
 
     # DB upsert called
     assert len(pool.calls) == 1
@@ -70,10 +87,7 @@ async def test_persist_and_publish_summary_llm_failure(monkeypatch):
         raise RuntimeError("fail")
 
     monkeypatch.setattr(summary_sidecar, "llm_summarize", failing_llm)
-
-    pool = FakePool()
-    producer = FakeProducer()
-    log = summary_sidecar.get_logger(__name__)
+    summary_sidecar._llm_semaphore = summary_sidecar.asyncio.Semaphore(1)
 
     payload = {
         "time": "2026-01-27T12:00:00+00:00",
@@ -87,13 +101,12 @@ async def test_persist_and_publish_summary_llm_failure(monkeypatch):
     }
 
     with pytest.raises(RuntimeError):
-        await summary_sidecar.persist_and_publish_summary(json.dumps(payload).encode(), producer, pool, log)
+        await summary_sidecar.compute_summary(payload, "stub", None)
 
 
 @pytest.mark.asyncio
 async def test_persist_and_publish_summary_batch(monkeypatch):
-    monkeypatch.setattr(summary_sidecar, "llm_summarize", lambda *args, **kwargs: "LLM SUMMARY")
-    summary_sidecar._llm_semaphore = summary_sidecar.asyncio.Semaphore(2)
+    summary = "LLM SUMMARY"
 
     pool = FakePool()
     producer = FakeProducer()
@@ -115,7 +128,7 @@ async def test_persist_and_publish_summary_batch(monkeypatch):
     ]
 
     for p in payloads:
-        await summary_sidecar.persist_and_publish_summary(json.dumps(p).encode(), producer, pool, log)
+        await summary_sidecar.persist_and_publish_summary(p, summary, producer, pool, log)
 
     # Two upserts, two publishes
     assert len(pool.calls) == 2

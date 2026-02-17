@@ -169,6 +169,63 @@ async def test_sentiment_sidecar_dlq_on_failure(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_sentiment_fallback_on_slow_batch(monkeypatch):
+    pool = FakePool()
+    producer = FakeProducer()
+    consumer = FakeConsumer()
+
+    monkeypatch.setattr(settings, "sentiment_max_latency_ms", 1)
+    monkeypatch.setattr(settings, "sentiment_fallback_on_slow", True)
+
+    def fake_predict(texts):
+        return ([(0.5, "positive", 0.9) for _ in texts], False)
+
+    times = [0.0, 0.01]
+
+    def fake_perf_counter():
+        return times.pop(0)
+
+    monkeypatch.setattr(sentiment_sidecar.sentiment_model, "predict", fake_predict)
+    monkeypatch.setattr(sentiment_sidecar.time, "perf_counter", fake_perf_counter)
+
+    msg = NewsMsg(
+        time=datetime(2026, 2, 1, 0, 0, tzinfo=timezone.utc),
+        title="headline",
+        url="http://x",
+        source="rss",
+        sentiment=0.0,
+    )
+    fallback_used, metrics = await _run_sentiment_flow([FakeMsg(msg.to_bytes())], consumer, producer, pool)
+    assert fallback_used is True
+    snapshot = metrics.snapshot()
+    assert snapshot["counters"].get("sentiment_fallbacks") == 1
+
+
+@pytest.mark.asyncio
+async def test_sentiment_result_mismatch_falls_back(monkeypatch):
+    pool = FakePool()
+    producer = FakeProducer()
+    consumer = FakeConsumer()
+
+    def fake_predict(texts):
+        return ([], False)
+
+    monkeypatch.setattr(sentiment_sidecar.sentiment_model, "predict", fake_predict)
+
+    msg = NewsMsg(
+        time=datetime(2026, 2, 1, 0, 0, tzinfo=timezone.utc),
+        title="headline",
+        url="http://x",
+        source="rss",
+        sentiment=0.0,
+    )
+    fallback_used, metrics = await _run_sentiment_flow([FakeMsg(msg.to_bytes())], consumer, producer, pool)
+    assert fallback_used is True
+    snapshot = metrics.snapshot()
+    assert snapshot["counters"].get("sentiment_errors") == 1
+
+
+@pytest.mark.asyncio
 async def test_sentiment_dlq_failure_does_not_commit(monkeypatch):
     pool = FakePool()
     producer = FakeProducer()

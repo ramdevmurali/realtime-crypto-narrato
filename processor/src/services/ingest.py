@@ -29,16 +29,15 @@ def _prune_seen(seen_cache: dict[str, datetime], seen_order: deque[str], now_ts)
         seen_cache.pop(oldest, None)
 
 
-async def persist_and_publish_feed_entry(
-    processor: ProcessorState,
+def build_news_msg(
     entry,
     seen_cache: dict[str, datetime],
     seen_order: deque[str],
     seen_now,
-):
+) -> tuple[bool, NewsMsg | None]:
     uid = entry.get('id') or entry.get('link') or entry.get('title')
     if uid in seen_cache:
-        return False
+        return False, None
     seen_cache[uid] = seen_now
     seen_order.append(uid)
     if len(seen_order) > settings.rss_seen_max:
@@ -52,10 +51,28 @@ async def persist_and_publish_feed_entry(
     source = entry.get('source', {}).get('title') if entry.get('source') else settings.rss_default_source
     sentiment = simple_sentiment(title)
     msg = NewsMsg(time=ts, title=title, url=url, source=source, sentiment=sentiment)
-    await with_retries(insert_headline, ts, title, source, url, sentiment, log=getattr(processor, "log", None), op="insert_headline")
-    processor.latest_headline = (title, sentiment, ts)
-    await with_retries(processor.producer.send_and_wait, settings.news_topic, msg.to_bytes(), log=getattr(processor, "log", None), op="send_news")
-    return True
+    return True, msg
+
+
+async def publish_news_msg(processor: ProcessorState, msg: NewsMsg) -> None:
+    await with_retries(
+        insert_headline,
+        msg.time,
+        msg.title,
+        msg.source,
+        msg.url,
+        msg.sentiment,
+        log=getattr(processor, "log", None),
+        op="insert_headline",
+    )
+    processor.latest_headline = (msg.title, msg.sentiment, msg.time)
+    await with_retries(
+        processor.producer.send_and_wait,
+        settings.news_topic,
+        msg.to_bytes(),
+        log=getattr(processor, "log", None),
+        op="send_news",
+    )
 
 
 async def price_ingest_task(processor: ProcessorState):
@@ -114,8 +131,9 @@ async def news_ingest_task(processor: ProcessorState):
             seen_now = now_utc()
             _prune_seen(seen_cache, seen_order, seen_now)
             for entry in feed.entries[:settings.news_batch_limit]:
-                sent = await persist_and_publish_feed_entry(processor, entry, seen_cache, seen_order, seen_now)
-                if sent:
+                sent, msg = build_news_msg(entry, seen_cache, seen_order, seen_now)
+                if sent and msg:
+                    await publish_news_msg(processor, msg)
                     news_messages_sent += 1
                     if news_messages_sent % settings.news_publish_log_every == 0:
                         log.info("news_published_count", extra={"count": news_messages_sent})

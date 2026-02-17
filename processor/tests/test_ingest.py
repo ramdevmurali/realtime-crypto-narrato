@@ -45,15 +45,7 @@ class FakeProcessor:
         self.latest_headline = (None, None, None)
 
 
-@pytest.mark.asyncio
-async def test_process_feed_entry_dedupes(monkeypatch):
-    calls = []
-
-    async def fake_insert_headline(*args, **kwargs):
-        calls.append(args)
-
-    monkeypatch.setattr(ingest, "insert_headline", fake_insert_headline)
-
+def test_build_news_msg_dedupes():
     proc = FakeProcessor()
     seen_cache = {}
     seen_order = deque()
@@ -67,26 +59,17 @@ async def test_process_feed_entry_dedupes(monkeypatch):
     seen_now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
 
     # first time should publish
-    published = await ingest.persist_and_publish_feed_entry(proc, entry, seen_cache, seen_order, seen_now)
+    published, msg = ingest.build_news_msg(entry, seen_cache, seen_order, seen_now)
     assert published is True
-    assert len(proc.producer.sent) == 1
-    assert len(calls) == 1
+    assert msg is not None
 
     # second time same id should skip
-    published = await ingest.persist_and_publish_feed_entry(proc, entry, seen_cache, seen_order, seen_now)
+    published, msg = ingest.build_news_msg(entry, seen_cache, seen_order, seen_now)
     assert published is False
-    assert len(proc.producer.sent) == 1
-    assert len(calls) == 1
+    assert msg is None
 
 
-@pytest.mark.asyncio
-async def test_process_feed_entry_ttl_eviction(monkeypatch):
-    calls = []
-
-    async def fake_insert_headline(*args, **kwargs):
-        calls.append(args)
-
-    monkeypatch.setattr(ingest, "insert_headline", fake_insert_headline)
+def test_build_news_msg_ttl_eviction(monkeypatch):
     monkeypatch.setattr(settings, "rss_seen_ttl_sec", 60)
     monkeypatch.setattr(settings, "rss_seen_max", 5000)
 
@@ -104,18 +87,12 @@ async def test_process_feed_entry_ttl_eviction(monkeypatch):
         "published": "2026-01-27T12:00:00Z",
         "source": {"title": "rss"},
     }
-    published = await ingest.persist_and_publish_feed_entry(proc, entry, seen_cache, seen_order, now_ts)
+    published, msg = ingest.build_news_msg(entry, seen_cache, seen_order, now_ts)
     assert published is True
+    assert msg is not None
 
 
-@pytest.mark.asyncio
-async def test_process_feed_entry_max_cap(monkeypatch):
-    calls = []
-
-    async def fake_insert_headline(*args, **kwargs):
-        calls.append(args)
-
-    monkeypatch.setattr(ingest, "insert_headline", fake_insert_headline)
+def test_build_news_msg_max_cap(monkeypatch):
     monkeypatch.setattr(settings, "rss_seen_ttl_sec", 86400)
     monkeypatch.setattr(settings, "rss_seen_max", 2)
 
@@ -132,11 +109,40 @@ async def test_process_feed_entry_max_cap(monkeypatch):
             "published": "2026-01-27T12:00:00Z",
             "source": {"title": "rss"},
         }
-        published = await ingest.persist_and_publish_feed_entry(proc, entry, seen_cache, seen_order, now_ts + timedelta(seconds=i))
+        published, msg = ingest.build_news_msg(entry, seen_cache, seen_order, now_ts + timedelta(seconds=i))
         assert published is True
+        assert msg is not None
 
     assert len(seen_cache) == 2
     assert len(seen_order) == 2
+
+
+@pytest.mark.asyncio
+async def test_publish_news_msg_inserts_and_publishes(monkeypatch):
+    calls = []
+
+    async def fake_insert_headline(*args, **kwargs):
+        calls.append(args)
+
+    monkeypatch.setattr(ingest, "insert_headline", fake_insert_headline)
+
+    proc = FakeProcessor()
+    entry = {
+        "id": "abc",
+        "title": "Breaking",
+        "link": "http://example.com",
+        "published": "2026-01-27T12:00:00Z",
+        "source": {"title": "rss"},
+    }
+    seen_now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+    published, msg = ingest.build_news_msg(entry, {}, deque(), seen_now)
+    assert published is True
+    assert msg is not None
+
+    await ingest.publish_news_msg(proc, msg)
+    assert len(calls) == 1
+    assert len(proc.producer.sent) == 1
+    assert proc.latest_headline[0] == "Breaking"
 
 
 @pytest.mark.asyncio

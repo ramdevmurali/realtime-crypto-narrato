@@ -136,11 +136,12 @@ curl -N 'http://localhost:8000/headlines/stream?limit=5&interval=2'
 - RSS defaults: `RSS_DEFAULT_TITLE`, `RSS_DEFAULT_SOURCE`.
 - Sentiment sidecar: `SENTIMENT_PROVIDER`, `SENTIMENT_MODEL_PATH`, `SENTIMENT_BATCH_SIZE`,
   `SENTIMENT_MAX_LATENCY_MS`, `SENTIMENT_FALLBACK_ON_SLOW`, `SENTIMENT_FAIL_FAST`,
-  `SENTIMENT_LIGHT_RUNTIME`, `SENTIMENT_METRICS_HOST`, `SENTIMENT_METRICS_PORT`,
+  `SENTIMENT_FALLBACK_LOG_EVERY`, `SENTIMENT_LIGHT_RUNTIME`, `SENTIMENT_METRICS_HOST`, `SENTIMENT_METRICS_PORT`,
   `SENTIMENT_POS_THRESHOLD`, `SENTIMENT_NEG_THRESHOLD`, `SENTIMENT_MAX_SEQ_LEN`,
   `SENTIMENT_SIDECAR_GROUP`, `NEWS_ENRICHED_TOPIC`, `NEWS_DLQ_TOPIC`.
 - Sentiment perf logs: `sentiment_infer_ms`, `batch_size`, `queue_lag_ms`, `fallback_used`.
   If `SENTIMENT_MAX_LATENCY_MS` is set, slow batches log `sentiment_batch_slow`.
+  Fallback warnings are rate-limited by `SENTIMENT_FALLBACK_LOG_EVERY`.
 - Startup check: if `SENTIMENT_PROVIDER=onnx`, the sidecar attempts a model load on start.
   Failure logs `sentiment_model_load_failed` and continues unless `SENTIMENT_FAIL_FAST=true`.
 - Metrics endpoint: sentiment sidecar exposes `/metrics` (JSON) on

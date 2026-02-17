@@ -119,11 +119,13 @@ async def infer_sentiment_batch(messages: Iterable, consumer, producer, log, met
         metrics.inc("sentiment_errors")
 
     if fallback_used:
-        log.warning(
-            "sentiment_fallback_used",
-            extra={"provider": settings.sentiment_provider, "batch_size": len(parsed)},
-        )
         metrics.inc("sentiment_fallbacks")
+        fallback_count = metrics.snapshot()["counters"].get("sentiment_fallbacks", 0)
+        if fallback_count == 1 or fallback_count % settings.sentiment_fallback_log_every == 0:
+            log.warning(
+                "sentiment_fallback_used",
+                extra={"provider": settings.sentiment_provider, "batch_size": len(parsed)},
+            )
 
     log.info(
         "sentiment_batch_processed",

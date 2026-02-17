@@ -115,6 +115,7 @@ class Settings(BaseSettings):
     sentiment_max_latency_ms: int | None = None
     sentiment_sidecar_group: str = "sentiment-sidecar"
     sentiment_fallback_on_slow: bool = False
+    sentiment_fallback_log_every: int = 100
     sentiment_fail_fast: bool = False
     sentiment_light_runtime: bool = False
     sentiment_metrics_host: str = "0.0.0.0"
@@ -169,6 +170,7 @@ class Settings(BaseSettings):
         "llm_max_tokens",
         "sentiment_batch_size",
         "sentiment_max_seq_len",
+        "sentiment_fallback_log_every",
     )
     @classmethod
     def _positive(cls, v):

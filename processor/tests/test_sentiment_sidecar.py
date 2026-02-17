@@ -41,6 +41,27 @@ class FakeMsg:
         self.value = payload
 
 
+async def _run_sentiment_flow(messages, consumer, producer, pool):
+    metrics = sentiment_sidecar.MetricsRegistry()
+    parsed, results, fallback_used, *_ = await sentiment_sidecar.infer_sentiment_batch(
+        messages,
+        consumer,
+        producer,
+        sentiment_sidecar.log,
+        metrics,
+    )
+    await sentiment_sidecar.persist_and_publish_sentiment_batch(
+        parsed,
+        results,
+        producer,
+        pool,
+        consumer,
+        sentiment_sidecar.log,
+        metrics,
+    )
+    return fallback_used
+
+
 @pytest.mark.asyncio
 async def test_sentiment_sidecar_enriches_and_publishes(monkeypatch):
     pool = FakePool()
@@ -59,23 +80,7 @@ async def test_sentiment_sidecar_enriches_and_publishes(monkeypatch):
         source="rss",
         sentiment=0.0,
     )
-    metrics = sentiment_sidecar.MetricsRegistry()
-    parsed, results, *_ = await sentiment_sidecar.infer_sentiment_batch(
-        [FakeMsg(msg.to_bytes())],
-        consumer,
-        producer,
-        sentiment_sidecar.log,
-        metrics,
-    )
-    await sentiment_sidecar.persist_and_publish_sentiment_batch(
-        parsed,
-        results,
-        producer,
-        pool,
-        consumer,
-        sentiment_sidecar.log,
-        metrics,
-    )
+    await _run_sentiment_flow([FakeMsg(msg.to_bytes())], consumer, producer, pool)
 
     assert len(pool.calls) == 1
     sql, params = pool.calls[0]
@@ -111,24 +116,8 @@ async def test_sentiment_sidecar_falls_back_on_model_error(monkeypatch):
         source="rss",
         sentiment=0.0,
     )
-    metrics = sentiment_sidecar.MetricsRegistry()
-    parsed, results, fallback_used, *_ = await sentiment_sidecar.infer_sentiment_batch(
-        [FakeMsg(msg.to_bytes())],
-        consumer,
-        producer,
-        sentiment_sidecar.log,
-        metrics,
-    )
+    fallback_used = await _run_sentiment_flow([FakeMsg(msg.to_bytes())], consumer, producer, pool)
     assert fallback_used is True
-    await sentiment_sidecar.persist_and_publish_sentiment_batch(
-        parsed,
-        results,
-        producer,
-        pool,
-        consumer,
-        sentiment_sidecar.log,
-        metrics,
-    )
 
     assert len(producer.sent) == 1
     _, payload = producer.sent[0]
@@ -168,23 +157,7 @@ async def test_sentiment_sidecar_dlq_on_failure(monkeypatch):
         source="rss",
         sentiment=0.0,
     )
-    metrics = sentiment_sidecar.MetricsRegistry()
-    parsed, results, *_ = await sentiment_sidecar.infer_sentiment_batch(
-        [FakeMsg(msg.to_bytes())],
-        consumer,
-        producer,
-        sentiment_sidecar.log,
-        metrics,
-    )
-    await sentiment_sidecar.persist_and_publish_sentiment_batch(
-        parsed,
-        results,
-        producer,
-        pool,
-        consumer,
-        sentiment_sidecar.log,
-        metrics,
-    )
+    await _run_sentiment_flow([FakeMsg(msg.to_bytes())], consumer, producer, pool)
 
     assert len(producer.sent) == 1
     topic, _ = producer.sent[0]

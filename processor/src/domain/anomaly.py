@@ -1,121 +1,68 @@
-from datetime import timedelta
-import json
+from __future__ import annotations
 
-from ..config import settings, get_thresholds
-from ..io.db import insert_anomaly
-from ..utils import llm_summarize, with_retries
-from ..logging_config import get_logger
-from ..io.models.messages import SummaryRequestMsg, AlertMsg
-from ..processor_state import ProcessorState
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from typing import Dict, List, Tuple
+
+from ..config import settings
 
 
-async def check_anomalies(processor: ProcessorState, symbol: str, ts, metrics):
-    """Detect and publish anomalies for a symbol at time ts based on metrics."""
-    producer = processor.producer
-    assert producer
-    log = getattr(processor, "log", get_logger(__name__))
-    if not hasattr(processor, "alerts_emitted"):
-        processor.alerts_emitted = 0
-    headline = None
-    sentiment = None
-    headline_ts = None
-    if hasattr(processor, "latest_headline"):
-        latest = processor.latest_headline
-        if isinstance(latest, tuple):
-            if len(latest) >= 1:
-                headline = latest[0]
-            if len(latest) >= 2:
-                sentiment = latest[1]
-            if len(latest) >= 3:
-                headline_ts = latest[2]
-    if headline_ts is None or ts - headline_ts > timedelta(seconds=settings.headline_max_age_sec):
+@dataclass
+class HeadlineContext:
+    headline: str | None
+    sentiment: float | None
+    headline_ts: datetime | None
+
+
+@dataclass
+class AnomalyEvent:
+    time: datetime
+    symbol: str
+    window: str
+    direction: str
+    ret: float
+    threshold: float
+    headline: str | None
+    sentiment: float | None
+    summary_stub: str | None = None
+
+
+def detect_anomalies(
+    symbol: str,
+    ts: datetime,
+    metrics: Dict[str, float] | None,
+    thresholds: Dict[str, float],
+    last_alerts: Dict[Tuple[str, str], datetime],
+    headline_ctx: HeadlineContext,
+) -> List[AnomalyEvent]:
+    headline = headline_ctx.headline
+    sentiment = headline_ctx.sentiment
+    if headline_ctx.headline_ts is None or ts - headline_ctx.headline_ts > timedelta(seconds=settings.headline_max_age_sec):
         headline = None
         sentiment = None
-    thresholds = get_thresholds()
+
+    events: List[AnomalyEvent] = []
     for label, threshold in thresholds.items():
         ret = metrics.get(f"return_{label}") if metrics else None
         if ret is None:
             continue
         if abs(ret) >= threshold:
             key = (symbol, label)
-            last_ts = processor.last_alert.get(key)
+            last_ts = last_alerts.get(key)
             if last_ts and ts - last_ts < timedelta(seconds=settings.anomaly_cooldown_sec):
                 continue
             direction = "up" if ret >= 0 else "down"
-            # Use the base/stub summary locally by default; offload richer LLM to summaries topic.
-            if settings.anomaly_hotpath_stub_summary:
-                summary = llm_summarize("stub", None, symbol, label, ret, headline, sentiment)
-            else:
-                api_key = None
-                if settings.llm_provider == "openai":
-                    api_key = settings.openai_api_key
-                elif settings.llm_provider == "google":
-                    api_key = settings.google_api_key
-                summary = llm_summarize(settings.llm_provider, api_key, symbol, label, ret, headline, sentiment)
-
-            summary_req = SummaryRequestMsg(
-                time=ts.isoformat(),
-                symbol=symbol,
-                window=label,
-                direction=direction,
-                ret=ret,
-                threshold=threshold,
-                headline=headline,
-                sentiment=sentiment,
+            events.append(
+                AnomalyEvent(
+                    time=ts,
+                    symbol=symbol,
+                    window=label,
+                    direction=direction,
+                    ret=ret,
+                    threshold=threshold,
+                    headline=headline,
+                    sentiment=sentiment,
+                )
             )
 
-            alert_msg = AlertMsg(
-                time=ts.isoformat(),
-                symbol=symbol,
-                window=label,
-                direction=direction,
-                ret=ret,
-                threshold=threshold,
-                headline=headline,
-                sentiment=sentiment,
-                summary=summary,
-            )
-
-            # Publish summary-request for sidecar to enrich asynchronously.
-            await with_retries(
-                producer.send_and_wait,
-                settings.summaries_topic,
-                summary_req.to_bytes(),
-                log=log,
-                op="send_summary_request",
-            )
-            await with_retries(
-                insert_anomaly,
-                ts,
-                symbol,
-                label,
-                direction,
-                ret,
-                threshold,
-                headline,
-                sentiment,
-                summary,
-                log=log,
-                op="insert_anomaly",
-            )
-            await with_retries(
-                producer.send_and_wait,
-                settings.alerts_topic,
-                alert_msg.to_bytes(),
-                log=log,
-                op="send_alert",
-            )
-            processor.last_alert[key] = ts
-            processor.alerts_emitted += 1
-            log.info(
-                "alert_emitted",
-                extra={
-                    "symbol": symbol,
-                    "window": label,
-                    "direction": direction,
-                    "ret": ret,
-                    "threshold": threshold,
-                },
-            )
-            if processor.alerts_emitted % settings.alert_log_every == 0:
-                log.info("alerts_emitted_count", extra={"count": processor.alerts_emitted})
+    return events

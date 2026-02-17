@@ -4,7 +4,7 @@ from datetime import datetime, timezone, timedelta
 import pytest
 import json
 
-from processor.src.domain import anomaly
+from processor.src.services import anomaly_service
 from processor.src.config import settings
 
 
@@ -30,13 +30,13 @@ async def test_check_anomalies_triggers_and_updates_state(monkeypatch):
     async def fake_insert_anomaly(*args, **kwargs):
         calls.append(args)
 
-    monkeypatch.setattr(anomaly, "insert_anomaly", fake_insert_anomaly)
+    monkeypatch.setattr(anomaly_service, "insert_anomaly", fake_insert_anomaly)
 
     proc = FakeProcessor()
     ts = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
     metrics = {"return_1m": settings.alert_threshold_1m + 0.01}
 
-    await anomaly.check_anomalies(proc, "btcusdt", ts, metrics)
+    await anomaly_service.check_anomalies(proc, "btcusdt", ts, metrics)
 
     assert proc.last_alert[("btcusdt", "1m")] == ts
     assert len(proc.producer.sent) == 2  # summary request + alert
@@ -56,13 +56,13 @@ async def test_check_anomalies_below_threshold_no_alert(monkeypatch):
     async def fake_insert_anomaly(*args, **kwargs):
         calls.append(args)
 
-    monkeypatch.setattr(anomaly, "insert_anomaly", fake_insert_anomaly)
+    monkeypatch.setattr(anomaly_service, "insert_anomaly", fake_insert_anomaly)
 
     proc = FakeProcessor()
     ts = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
     metrics = {"return_1m": settings.alert_threshold_1m - 0.01}
 
-    await anomaly.check_anomalies(proc, "ethusdt", ts, metrics)
+    await anomaly_service.check_anomalies(proc, "ethusdt", ts, metrics)
 
     assert ("ethusdt", "1m") not in proc.last_alert
     assert len(proc.producer.sent) == 0
@@ -76,15 +76,15 @@ async def test_check_anomalies_respects_rate_limit(monkeypatch):
     async def fake_insert_anomaly(*args, **kwargs):
         calls.append(args)
 
-    monkeypatch.setattr(anomaly, "insert_anomaly", fake_insert_anomaly)
+    monkeypatch.setattr(anomaly_service, "insert_anomaly", fake_insert_anomaly)
 
     proc = FakeProcessor()
     ts = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
     metrics = {"return_1m": settings.alert_threshold_1m + 0.02}
 
-    await anomaly.check_anomalies(proc, "btc", ts, metrics)
-    # Second call within 60s should be suppressed
-    await anomaly.check_anomalies(proc, "btc", ts + timedelta(seconds=10), metrics)
+    await anomaly_service.check_anomalies(proc, "btc", ts, metrics)
+    # Second call within cooldown should be suppressed
+    await anomaly_service.check_anomalies(proc, "btc", ts + timedelta(seconds=10), metrics)
 
     assert proc.last_alert[("btc", "1m")] == ts
     assert len(proc.producer.sent) == 2  # summary+alert once
@@ -98,18 +98,18 @@ async def test_check_anomalies_direction_up_down(monkeypatch):
     async def fake_insert_anomaly(*args, **kwargs):
         calls.append(args)
 
-    monkeypatch.setattr(anomaly, "insert_anomaly", fake_insert_anomaly)
+    monkeypatch.setattr(anomaly_service, "insert_anomaly", fake_insert_anomaly)
 
     proc = FakeProcessor()
     ts = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
 
     # positive return => up
     metrics_up = {"return_1m": settings.alert_threshold_1m + 0.02}
-    await anomaly.check_anomalies(proc, "up", ts, metrics_up)
+    await anomaly_service.check_anomalies(proc, "up", ts, metrics_up)
 
     # negative return => down
     metrics_down = {"return_1m": -settings.alert_threshold_1m - 0.02}
-    await anomaly.check_anomalies(proc, "down", ts + timedelta(seconds=70), metrics_down)
+    await anomaly_service.check_anomalies(proc, "down", ts + timedelta(seconds=70), metrics_down)
 
     assert len(proc.producer.sent) == 4  # summary+alert for each
     up_payload = json.loads(proc.producer.sent[1][1].decode())
@@ -125,14 +125,14 @@ async def test_check_anomalies_includes_latest_headline_and_sentiment(monkeypatc
     async def fake_insert_anomaly(*args, **kwargs):
         calls.append(args)
 
-    monkeypatch.setattr(anomaly, "insert_anomaly", fake_insert_anomaly)
+    monkeypatch.setattr(anomaly_service, "insert_anomaly", fake_insert_anomaly)
 
     proc = FakeProcessor()
     ts = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
     proc.latest_headline = ("Breaking news", -0.3, ts - timedelta(minutes=5))
     metrics = {"return_1m": settings.alert_threshold_1m + 0.02}
 
-    await anomaly.check_anomalies(proc, "btc", ts, metrics)
+    await anomaly_service.check_anomalies(proc, "btc", ts, metrics)
 
     assert len(proc.producer.sent) == 2  # summary+alert
     payload_str = proc.producer.sent[1][1].decode()
@@ -147,14 +147,14 @@ async def test_check_anomalies_omits_stale_headline(monkeypatch):
     async def fake_insert_anomaly(*args, **kwargs):
         calls.append(args)
 
-    monkeypatch.setattr(anomaly, "insert_anomaly", fake_insert_anomaly)
+    monkeypatch.setattr(anomaly_service, "insert_anomaly", fake_insert_anomaly)
 
     proc = FakeProcessor()
     ts = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
     proc.latest_headline = ("Old news", 0.2, ts - timedelta(minutes=30))
     metrics = {"return_1m": settings.alert_threshold_1m + 0.02}
 
-    await anomaly.check_anomalies(proc, "btc", ts, metrics)
+    await anomaly_service.check_anomalies(proc, "btc", ts, metrics)
 
     payload = json.loads(proc.producer.sent[1][1].decode())
     assert payload["headline"] is None
@@ -168,12 +168,12 @@ async def test_check_anomalies_no_metrics_no_alert(monkeypatch):
     async def fake_insert_anomaly(*args, **kwargs):
         calls.append(args)
 
-    monkeypatch.setattr(anomaly, "insert_anomaly", fake_insert_anomaly)
+    monkeypatch.setattr(anomaly_service, "insert_anomaly", fake_insert_anomaly)
 
     proc = FakeProcessor()
     ts = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
 
-    await anomaly.check_anomalies(proc, "btc", ts, {})
+    await anomaly_service.check_anomalies(proc, "btc", ts, {})
 
     assert len(proc.producer.sent) == 0
     assert len(calls) == 0

@@ -84,7 +84,9 @@ async def sleep_backoff(attempt: int, base: float | None = None, cap: float | No
     if cap is None:
         cap = settings.retry_backoff_cap_sec
     wait = min(cap, base * (2 ** attempt))
-    wait = wait * (0.5 + random.random())  # jitter 0.5x-1.5x
+    jitter_span = settings.retry_jitter_max - settings.retry_jitter_min
+    jitter = settings.retry_jitter_min + (random.random() * jitter_span)
+    wait = wait * jitter
     await asyncio.sleep(wait)
 
 

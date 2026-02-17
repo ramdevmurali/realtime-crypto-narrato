@@ -62,6 +62,8 @@ class Settings(BaseSettings):
     retry_max_attempts: int = 3
     retry_backoff_base_sec: float = 1.0
     retry_backoff_cap_sec: float = 30.0
+    retry_jitter_min: float = 0.5
+    retry_jitter_max: float = 1.5
     ewma_return_alpha: float = 0.25  # smoothing for return z-scores
     ewma_z_cap: float = 6.0  # clamp EWMA z-scores
     vol_z_spike_threshold: float = 3.0  # flag vol spikes
@@ -156,6 +158,8 @@ class Settings(BaseSettings):
         "retry_max_attempts",
         "retry_backoff_base_sec",
         "retry_backoff_cap_sec",
+        "retry_jitter_min",
+        "retry_jitter_max",
         "llm_max_tokens",
         "sentiment_batch_size",
         "sentiment_max_seq_len",
@@ -241,6 +245,12 @@ class Settings(BaseSettings):
             raise ValueError("return_percentile_high must be in (0,1)")
         if self.return_percentile_low >= self.return_percentile_high:
             raise ValueError("return_percentile_low must be < return_percentile_high")
+        if self.retry_jitter_min <= 0:
+            raise ValueError("retry_jitter_min must be > 0")
+        if self.retry_jitter_max <= 0:
+            raise ValueError("retry_jitter_max must be > 0")
+        if self.retry_jitter_min > self.retry_jitter_max:
+            raise ValueError("retry_jitter_min must be <= retry_jitter_max")
         return self
 
     def safe_dict(self):

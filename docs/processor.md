@@ -17,7 +17,7 @@
   - DLQ knob: `price_dlq_topic` (default `prices-deadletter`).
 - `io/db.py` — asyncpg pool; creates Timescale hypertables (prices, metrics, headlines, anomalies); insert helpers.
 - `utils.py` — now_utc, simple_sentiment stub, llm_summarize (stub/OpenAI/Gemini), backoff helpers (`sleep_backoff`, `with_retries`).
-- `domain/windows.py` — in-memory PriceWindow: add/prune (max window + resample step), strict-window returns/vol, keeps smoothed z-score state.
+- `domain/windows.py` — in-memory PriceWindow: add/prune (max window + resample step), strict-window returns/vol, keeps smoothed z-score state. Same-timestamp updates overwrite the last price (no duplicate points).
 - `domain/metrics.py` — computes rolling returns/vol per symbol from PriceWindow; emits raw return z-scores, EWMA-smoothed return z-scores, volatility z-scores + spike flags, and 5th/95th return percentiles per window.
 - `domain/anomaly.py` — threshold checks, rate-limit (60s), direction, summarizes, persists + publishes alerts.
 - `services/ingest.py` — tasks:

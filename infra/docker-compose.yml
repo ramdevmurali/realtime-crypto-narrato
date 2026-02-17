@@ -62,7 +62,10 @@ services:
       - streaming
 
   processor:
-    build: ../processor
+    build:
+      context: ../processor
+      args:
+        SENTIMENT_LIGHT_RUNTIME: ${SENTIMENT_LIGHT_RUNTIME:-false}
     container_name: processor
     depends_on:
       - redpanda
@@ -91,7 +94,10 @@ services:
     command: python -m src.app
 
   summary-sidecar:
-    build: ../processor
+    build:
+      context: ../processor
+      args:
+        SENTIMENT_LIGHT_RUNTIME: ${SENTIMENT_LIGHT_RUNTIME:-false}
     container_name: summary-sidecar
     depends_on:
       - redpanda
@@ -113,7 +119,10 @@ services:
       - streaming
 
   sentiment-sidecar:
-    build: ../processor
+    build:
+      context: ../processor
+      args:
+        SENTIMENT_LIGHT_RUNTIME: ${SENTIMENT_LIGHT_RUNTIME:-false}
     container_name: sentiment-sidecar
     depends_on:
       - redpanda

@@ -137,3 +137,5 @@ curl -N 'http://localhost:8000/headlines/stream?limit=5&interval=2'
   `sentiment_dlq`, `sentiment_errors`).
 - Light runtime: set `SENTIMENT_LIGHT_RUNTIME=true` to use `tokenizers` directly
   and avoid importing `transformers` (useful for slimmer images).
+  For Docker builds, set `SENTIMENT_LIGHT_RUNTIME=true` so the image installs
+  `requirements-light.txt` (no `transformers`); otherwise it uses `requirements.txt`.

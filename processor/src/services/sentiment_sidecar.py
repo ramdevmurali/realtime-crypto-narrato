@@ -62,7 +62,7 @@ def _fallback_results(titles: List[str]) -> List[Tuple[float, None, None]]:
     return [(float(simple_sentiment(title)), None, None) for title in titles]
 
 
-async def persist_and_publish_sentiment_batch(messages: Iterable, consumer, producer, pool, log):
+async def infer_sentiment_batch(messages: Iterable, consumer, producer, log):
     parsed: List[Tuple[object, NewsMsg]] = []
     for msg in messages:
         try:
@@ -77,7 +77,7 @@ async def persist_and_publish_sentiment_batch(messages: Iterable, consumer, prod
         parsed.append((msg, payload))
 
     if not parsed:
-        return
+        return [], [], False, 0.0, 0.0
 
     METRICS.inc("sentiment_batches")
     titles = [payload.title for _, payload in parsed]
@@ -129,7 +129,12 @@ async def persist_and_publish_sentiment_batch(messages: Iterable, consumer, prod
             "fallback_used": fallback_used,
         },
     )
+    return parsed, results, fallback_used, infer_ms, queue_lag_ms
 
+
+async def persist_and_publish_sentiment_batch(parsed, results, producer, pool, consumer, log):
+    if not parsed:
+        return
     for (msg, payload), (score, label, confidence) in zip(parsed, results):
         try:
             await with_retries(
@@ -267,7 +272,20 @@ class SentimentSidecar(SidecarRuntime, RuntimeService):
                 )
                 messages = [msg for batch in msg_batch.values() for msg in batch]
                 if messages:
-                    await persist_and_publish_sentiment_batch(messages, self._consumer, self._producer, self._pool, self.log)
+                    parsed, results, _fallback, _infer_ms, _queue_lag_ms = await infer_sentiment_batch(
+                        messages,
+                        self._consumer,
+                        self._producer,
+                        self.log,
+                    )
+                    await persist_and_publish_sentiment_batch(
+                        parsed,
+                        results,
+                        self._producer,
+                        self._pool,
+                        self._consumer,
+                        self.log,
+                    )
                 await asyncio.sleep(0)  # yield
         finally:
             await self._shutdown()

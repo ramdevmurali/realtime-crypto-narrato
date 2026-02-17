@@ -42,6 +42,7 @@ Note: legacy folders like `processor/src/models` and `processor/src/processor/se
 - `headlines(time, title, source, url, sentiment)`
   - Note: the `headlines` table stores persisted records from the Kafka `news` topic (raw headline feed).
 - `anomalies(time, symbol, window_name, direction, return_value, threshold, headline, sentiment, summary)`
+  - Note: DB column `window_name` corresponds to `window` in Kafka payloads.
   - Note: the `anomalies` table stores persisted alert records.
 
 Terminology note: the `metrics` table stores **price metrics** (returns/vol/z/percentiles). This is distinct from **runtime telemetry metrics** (counters/rolling stats) exposed via `/metrics`.
@@ -61,6 +62,7 @@ Canonical payload models live in `processor/src/io/models/messages.py`.
 - `summaries` (summary-request): `time`, `symbol`, `window`, `direction`, `ret`, `threshold` (optional: `headline`, `sentiment`)
   - Note: this topic carries **summary requests**, not completed summaries.
 - `alerts`: `time`, `symbol`, `window`, `direction`, `ret`, `threshold`, `summary` (optional: `headline`, `sentiment`)
+  - Note: `window` in Kafka payloads maps to `window_name` in the `anomalies` table.
 - `news-enriched`: same as `news` plus optional `label`, `confidence` (sentiment sidecar output)
 - `news-deadletter`: raw news messages that failed enrichment (poison-pill avoidance)
 

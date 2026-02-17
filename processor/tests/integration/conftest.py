@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import contextlib
 import os
 import subprocess
@@ -32,7 +33,7 @@ async def _wait_for_db(dsn: str, timeout_sec: int = 60):
             last_exc = exc
             await asyncio.sleep(1)
     if last_exc is not None:
-        print(f"timescaledb not ready, last error: {last_exc!r}")
+        logging.getLogger(__name__).warning("timescaledb not ready", exc_info=last_exc)
     raise RuntimeError("timescaledb not ready")
 
 
@@ -52,7 +53,7 @@ async def _wait_for_kafka(brokers: str, timeout_sec: int = 60):
             with contextlib.suppress(Exception):
                 await producer.stop()
     if last_exc is not None:
-        print(f"redpanda not ready, last error: {last_exc!r}")
+        logging.getLogger(__name__).warning("redpanda not ready", exc_info=last_exc)
     raise RuntimeError("redpanda not ready")
 
 

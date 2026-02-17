@@ -88,6 +88,7 @@ class Settings(BaseSettings):
     llm_provider: str = "stub"  # stub|openai|google
     llm_max_tokens: int = 80
     llm_temperature: float = 0.3
+    anomaly_hotpath_stub_summary: bool = True
     openai_api_key: str | None = None
     google_api_key: str | None = None
     google_model: str = "gemini-2.5-flash"

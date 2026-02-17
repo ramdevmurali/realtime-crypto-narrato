@@ -42,8 +42,16 @@ async def check_anomalies(processor: ProcessorState, symbol: str, ts, metrics):
             if last_ts and ts - last_ts < timedelta(seconds=settings.anomaly_cooldown_sec):
                 continue
             direction = "up" if ret >= 0 else "down"
-            # Use the base/stub summary locally; offload richer LLM to summaries topic.
-            summary = llm_summarize("stub", None, symbol, label, ret, headline, sentiment)
+            # Use the base/stub summary locally by default; offload richer LLM to summaries topic.
+            if settings.anomaly_hotpath_stub_summary:
+                summary = llm_summarize("stub", None, symbol, label, ret, headline, sentiment)
+            else:
+                api_key = None
+                if settings.llm_provider == "openai":
+                    api_key = settings.openai_api_key
+                elif settings.llm_provider == "google":
+                    api_key = settings.google_api_key
+                summary = llm_summarize(settings.llm_provider, api_key, symbol, label, ret, headline, sentiment)
 
             summary_req = SummaryRequestMsg(
                 time=ts.isoformat(),

@@ -51,6 +51,7 @@ async def check_anomalies(processor: ProcessorState, symbol: str, ts: datetime, 
         event.summary_stub = summary
 
         summary_req = SummaryRequestMsg(
+            event_id=f"{event.time.isoformat()}:{event.symbol}:{event.window}",
             time=event.time.isoformat(),
             symbol=event.symbol,
             window=event.window,

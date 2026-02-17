@@ -108,8 +108,7 @@ async def persist_summary(payload, summary: str, pool, log):
     )
 
 
-async def publish_summary_alert(payload, summary: str, producer, log):
-    event_id = f"{payload['time']}:{payload['symbol']}:{payload['window']}"
+async def publish_summary_alert(payload, summary: str, producer, log, event_id: str):
     enriched_alert = AlertMsg(
         event_id=event_id,
         time=payload["time"],
@@ -152,6 +151,7 @@ async def process_summary_record(msg, consumer, producer, pool, log, semaphore: 
             )
             raise
 
+        event_id = payload.get("event_id") or f"{payload['time']}:{payload['symbol']}:{payload['window']}"
         await with_retries(
             persist_summary,
             payload,
@@ -167,6 +167,7 @@ async def process_summary_record(msg, consumer, producer, pool, log, semaphore: 
             summary,
             producer,
             log,
+            event_id,
             log=log,
             op="publish_summary_alert",
         )

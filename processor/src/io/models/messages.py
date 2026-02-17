@@ -37,6 +37,7 @@ class EnrichedNewsMsg(BaseModel):
 
 
 class SummaryRequestMsg(BaseModel):
+    event_id: Optional[str] = None
     time: str
     symbol: str
     window: str

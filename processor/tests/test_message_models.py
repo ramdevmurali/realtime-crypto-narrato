@@ -67,6 +67,20 @@ def test_summary_request_msg_valid():
         sentiment=0.2,
     )
     assert msg.symbol == "btcusdt"
+    assert msg.event_id is None
+
+
+def test_summary_request_msg_with_event_id():
+    msg = SummaryRequestMsg(
+        event_id="2026-02-01T00:00:00+00:00:btcusdt:1m",
+        time="2026-02-01T00:00:00+00:00",
+        symbol="btcusdt",
+        window="1m",
+        direction="up",
+        ret=0.05,
+        threshold=0.04,
+    )
+    assert msg.event_id == "2026-02-01T00:00:00+00:00:btcusdt:1m"
 
 
 def test_alert_msg_valid():

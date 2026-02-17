@@ -167,6 +167,28 @@ async def test_persist_and_publish_summary_batch(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_summary_preserves_event_id(monkeypatch):
+    payload = {
+        "event_id": "2026-01-27T12:00:00+00:00:btcusdt:1m",
+        "time": "2026-01-27T12:00:00+00:00",
+        "symbol": "btcusdt",
+        "window": "1m",
+        "direction": "up",
+        "ret": 0.07,
+        "threshold": 0.05,
+        "headline": "headline",
+        "sentiment": 0.1,
+    }
+
+    ok, consumer, producer, pool = await _run_summary_record(payload, monkeypatch)
+    assert ok is True
+    topic, out_payload = producer.sent[0]
+    assert topic == settings.alerts_topic
+    out = json.loads(out_payload.decode())
+    assert out["event_id"] == payload["event_id"]
+
+
+@pytest.mark.asyncio
 async def test_process_summary_record_sends_dlq_on_failure(monkeypatch):
     payload = {
         "time": "2026-01-27T12:00:00+00:00",

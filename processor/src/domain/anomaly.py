@@ -109,5 +109,5 @@ async def check_anomalies(processor: ProcessorState, symbol: str, ts, metrics):
                     "threshold": threshold,
                 },
             )
-            if processor.alerts_emitted % 50 == 0:
+            if processor.alerts_emitted % settings.alert_log_every == 0:
                 log.info("alerts_emitted_count", extra={"count": processor.alerts_emitted})

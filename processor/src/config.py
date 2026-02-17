@@ -68,6 +68,7 @@ class Settings(BaseSettings):
     percentile_min_samples: int = 3  # minimum samples for percentile calc
     return_percentile_low: float = 0.05
     return_percentile_high: float = 0.95  # percentiles for return bands
+    alert_log_every: int = 50  # cadence for alert count logs
 
     headline_max_age_sec: int = 900  # max age for attaching latest headline
     rss_seen_ttl_sec: int = 86400  # dedupe TTL for RSS IDs
@@ -119,6 +120,7 @@ class Settings(BaseSettings):
         "ewma_z_cap",
         "vol_z_spike_threshold",
         "percentile_min_samples",
+        "alert_log_every",
         "return_percentile_low",
         "return_percentile_high",
         "headline_max_age_sec",

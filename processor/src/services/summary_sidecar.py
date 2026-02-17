@@ -85,7 +85,7 @@ async def compute_summary(payload, llm_provider: str, api_key: str | None, semap
         )
 
 
-async def persist_and_publish_summary(payload, summary: str, producer, pool, log):
+async def persist_summary(payload, summary: str, pool, log):
     log.info("summary_request_received", extra=payload)
 
     # Upsert anomalies table with enriched summary
@@ -107,8 +107,11 @@ async def persist_and_publish_summary(payload, summary: str, producer, pool, log
         summary,
     )
 
-    # Republish enriched alert to alerts topic
+
+async def publish_summary_alert(payload, summary: str, producer, log):
+    event_id = f"{payload['time']}:{payload['symbol']}:{payload['window']}"
     enriched_alert = AlertMsg(
+        event_id=event_id,
         time=payload["time"],
         symbol=payload["symbol"],
         window=payload["window"],
@@ -150,14 +153,22 @@ async def process_summary_record(msg, consumer, producer, pool, log, semaphore: 
             raise
 
         await with_retries(
-            persist_and_publish_summary,
+            persist_summary,
             payload,
             summary,
-            producer,
             pool,
             log,
             log=log,
-            op="persist_and_publish_summary",
+            op="persist_summary",
+        )
+        await with_retries(
+            publish_summary_alert,
+            payload,
+            summary,
+            producer,
+            log,
+            log=log,
+            op="publish_summary_alert",
         )
         await _commit_message(consumer, msg, log)
         return True

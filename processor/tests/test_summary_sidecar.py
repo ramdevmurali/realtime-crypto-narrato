@@ -53,7 +53,7 @@ async def _run_summary_record(payload, monkeypatch, llm_result="LLM SUMMARY", fa
     if fail_publish:
         async def fail_handle(*args, **kwargs):
             raise RuntimeError("fail")
-        monkeypatch.setattr(summary_sidecar, "persist_and_publish_summary", fail_handle)
+        monkeypatch.setattr(summary_sidecar, "publish_summary_alert", fail_handle)
 
     monkeypatch.setattr(summary_sidecar, "with_retries", no_retry)
 
@@ -104,6 +104,7 @@ async def test_persist_and_publish_summary(monkeypatch):
     out = json.loads(out_payload.decode())
     assert out["summary"] == "LLM SUMMARY"
     assert out["symbol"] == "btcusdt"
+    assert out["event_id"] == "2026-01-27T12:00:00+00:00:btcusdt:1m"
 
 
 @pytest.mark.asyncio

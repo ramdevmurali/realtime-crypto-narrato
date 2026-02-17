@@ -51,6 +51,7 @@ class SummaryRequestMsg(BaseModel):
 
 
 class AlertMsg(BaseModel):
+    event_id: str
     time: str
     symbol: str
     window: str

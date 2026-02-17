@@ -71,6 +71,7 @@ def test_summary_request_msg_valid():
 
 def test_alert_msg_valid():
     msg = AlertMsg(
+        event_id="2026-02-01T00:00:00+00:00:btcusdt:1m",
         time="2026-02-01T00:00:00+00:00",
         symbol="btcusdt",
         window="1m",

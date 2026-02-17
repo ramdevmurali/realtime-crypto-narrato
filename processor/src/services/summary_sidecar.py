@@ -1,12 +1,12 @@
 import asyncio
 import json
-import asyncpg
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 from aiokafka.structs import TopicPartition, OffsetAndMetadata
 
 from ..config import settings
 from ..logging_config import get_logger
 from ..runtime_interface import RuntimeService
+from ..io.db import init_pool
 from ..utils import llm_summarize, with_retries
 from ..io.models.messages import SummaryRequestMsg, AlertMsg
 from .sidecar_runtime import SidecarRuntime
@@ -35,7 +35,7 @@ class SummarySidecar(SidecarRuntime, RuntimeService):
             group_id=settings.summary_consumer_group,
         )
 
-        self._pool = await asyncpg.create_pool(dsn=settings.database_url)
+        self._pool = await init_pool()
         await self._producer.start()
         await self._consumer.start()
 

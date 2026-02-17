@@ -7,6 +7,7 @@ import signal
 import asyncpg
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 
+from ..io.db import close_pool
 
 class SidecarRuntime:
     def __init__(self, log, stop_event_name: str):
@@ -44,6 +45,6 @@ class SidecarRuntime:
             with contextlib.suppress(Exception):
                 await self._producer.stop()
         if self._pool:
-            with contextlib.suppress(Exception):
-                await self._pool.close()
+            await close_pool()
+            self._pool = None
         self.log.info(self._stop_event_name)

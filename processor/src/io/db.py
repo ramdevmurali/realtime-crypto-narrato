@@ -1,4 +1,5 @@
 import asyncpg
+import contextlib
 from typing import Any, Dict
 from ..config import settings
 from ..logging_config import get_logger
@@ -7,11 +8,26 @@ _pool: asyncpg.Pool | None = None
 log = get_logger(__name__)
 
 
-async def get_pool() -> asyncpg.Pool:
+async def init_pool() -> asyncpg.Pool:
     global _pool
     if _pool is None:
         _pool = await asyncpg.create_pool(dsn=settings.database_url)
     return _pool
+
+
+async def get_pool() -> asyncpg.Pool:
+    if _pool is None:
+        raise RuntimeError("db pool not initialized; call init_pool() first")
+    return _pool
+
+
+async def close_pool() -> None:
+    global _pool
+    if _pool is None:
+        return
+    with contextlib.suppress(Exception):
+        await _pool.close()
+    _pool = None
 
 
 async def init_tables():

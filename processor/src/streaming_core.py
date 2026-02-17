@@ -5,7 +5,7 @@ import contextlib
 from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
 
 from .config import settings
-from .io.db import init_tables
+from .io.db import init_tables, init_pool, close_pool
 from .services.ingest import price_ingest_task, news_ingest_task
 from .utils import with_retries
 from .logging_config import get_logger
@@ -23,6 +23,7 @@ class StreamProcessor(ProcessorStateImpl, RuntimeService):
     async def start(self):
         self.log.info("processor_starting", extra={"component": "processor"})
         log_startup_config(self.log)
+        await init_pool()
         await healthcheck(self.log)
         await init_tables()
         self.producer = AIOKafkaProducer(bootstrap_servers=settings.kafka_brokers)
@@ -55,6 +56,7 @@ class StreamProcessor(ProcessorStateImpl, RuntimeService):
             await self.consumer.stop()
         if self.producer:
             await self.producer.stop()
+        await close_pool()
         self.log.info("processor_stopped", extra={"component": "processor"})
 
     async def process_prices_task(self):

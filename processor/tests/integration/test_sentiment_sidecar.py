@@ -9,13 +9,14 @@ from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 
 from processor.src.config import settings
 from processor.src.io.models.messages import NewsMsg
-from processor.src.io.db import get_pool
+from processor.src.io.db import get_pool, init_pool
 from processor.src.services.sentiment_sidecar import SentimentSidecar
 from processor.src.utils import simple_sentiment
 
 
 async def _wait_for_headline(title: str, timeout_sec: int = 10):
     deadline = time.monotonic() + timeout_sec
+    await init_pool()
     pool = await get_pool()
     while time.monotonic() < deadline:
         async with pool.acquire() as conn:

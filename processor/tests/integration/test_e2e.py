@@ -10,13 +10,14 @@ from aiokafka.structs import TopicPartition
 from processor.src import app as app_module
 from processor.src.services import price_pipeline as pipeline_module
 from processor.src.config import settings
-from processor.src.io.db import get_pool
+from processor.src.io.db import get_pool, init_pool, close_pool
 from processor.src.io.models.messages import PriceMsg
 from processor.src.utils import now_utc
 
 
 async def _start_processor(group_id: str):
     proc = app_module.StreamProcessor()
+    await init_pool()
     proc.producer = AIOKafkaProducer(bootstrap_servers=settings.kafka_brokers)
     await proc.producer.start()
     proc.consumer = AIOKafkaConsumer(
@@ -44,6 +45,7 @@ async def _stop_processor(proc, task):
         await proc.consumer.stop()
     if proc.producer:
         await proc.producer.stop()
+    await close_pool()
 
 
 async def _publish_prices(prices):
@@ -58,6 +60,7 @@ async def _publish_prices(prices):
 
 async def _wait_for_count(query: str, args, min_count: int, timeout_sec: int = 10):
     deadline = time.monotonic() + timeout_sec
+    await init_pool()
     pool = await get_pool()
     while time.monotonic() < deadline:
         async with pool.acquire() as conn:

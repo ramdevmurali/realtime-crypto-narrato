@@ -3,13 +3,13 @@ import json
 import time
 from typing import Iterable, List, Tuple
 
-import asyncpg
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 from aiokafka.structs import TopicPartition, OffsetAndMetadata
 
 from ..config import settings
 from ..logging_config import get_logger
 from ..runtime_interface import RuntimeService
+from ..io.db import init_pool
 from ..utils import simple_sentiment, with_retries, now_utc
 from ..io.models.messages import NewsMsg, EnrichedNewsMsg
 from ..metrics import MetricsRegistry
@@ -260,7 +260,7 @@ class SentimentSidecar(SidecarRuntime, RuntimeService):
             group_id=settings.sentiment_sidecar_group,
         )
 
-        self._pool = await asyncpg.create_pool(dsn=settings.database_url)
+        self._pool = await init_pool()
         await self._producer.start()
         await self._consumer.start()
 

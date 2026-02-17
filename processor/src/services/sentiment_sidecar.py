@@ -87,7 +87,11 @@ async def infer_sentiment_batch(messages: Iterable, consumer, producer, log, met
     fallback_used = False
     infer_start = time.perf_counter()
     try:
-        results = sentiment_model.predict(titles)
+        results, model_fallback = sentiment_model.predict(titles)
+        if model_fallback:
+            fallback_used = True
+            if settings.sentiment_provider != "stub":
+                metrics.inc("sentiment_errors")
     except Exception:
         results = _fallback_results(titles)
         fallback_used = True
@@ -115,6 +119,10 @@ async def infer_sentiment_batch(messages: Iterable, consumer, producer, log, met
         metrics.inc("sentiment_errors")
 
     if fallback_used:
+        log.warning(
+            "sentiment_fallback_used",
+            extra={"provider": settings.sentiment_provider, "batch_size": len(parsed)},
+        )
         metrics.inc("sentiment_fallbacks")
 
     log.info(

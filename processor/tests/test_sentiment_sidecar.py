@@ -59,7 +59,7 @@ async def _run_sentiment_flow(messages, consumer, producer, pool):
         sentiment_sidecar.log,
         metrics,
     )
-    return fallback_used
+    return fallback_used, metrics
 
 
 @pytest.mark.asyncio
@@ -69,7 +69,7 @@ async def test_sentiment_sidecar_enriches_and_publishes(monkeypatch):
     consumer = FakeConsumer()
 
     def fake_predict(texts):
-        return [(0.5, "positive", 0.9) for _ in texts]
+        return ([(0.5, "positive", 0.9) for _ in texts], False)
 
     monkeypatch.setattr(sentiment_sidecar.sentiment_model, "predict", fake_predict)
 
@@ -116,8 +116,10 @@ async def test_sentiment_sidecar_falls_back_on_model_error(monkeypatch):
         source="rss",
         sentiment=0.0,
     )
-    fallback_used = await _run_sentiment_flow([FakeMsg(msg.to_bytes())], consumer, producer, pool)
+    fallback_used, metrics = await _run_sentiment_flow([FakeMsg(msg.to_bytes())], consumer, producer, pool)
     assert fallback_used is True
+    snapshot = metrics.snapshot()
+    assert snapshot["counters"].get("sentiment_fallbacks") == 1
 
     assert len(producer.sent) == 1
     _, payload = producer.sent[0]
@@ -135,7 +137,7 @@ async def test_sentiment_sidecar_dlq_on_failure(monkeypatch):
     consumer = FakeConsumer()
 
     def fake_predict(texts):
-        return [(0.1, "neutral", 0.7) for _ in texts]
+        return ([(0.1, "neutral", 0.7) for _ in texts], False)
 
     async def fail_upsert(*args, **kwargs):
         raise RuntimeError("db fail")

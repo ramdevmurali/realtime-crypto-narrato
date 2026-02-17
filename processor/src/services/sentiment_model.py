@@ -103,9 +103,9 @@ def _encode_full(tokenizer, texts: List[str], input_names: set[str]):
     return inputs
 
 
-def predict(texts: List[str]) -> List[Tuple[float, str | None, float | None]]:
+def predict(texts: List[str]) -> Tuple[List[Tuple[float, str | None, float | None]], bool]:
     if settings.sentiment_provider == "stub":
-        return [(r.score, r.label, r.confidence) for r in _stub_predict(texts)]
+        return [(r.score, r.label, r.confidence) for r in _stub_predict(texts)], True
 
     try:
         session, tokenizer = load_model()
@@ -128,6 +128,6 @@ def predict(texts: List[str]) -> List[Tuple[float, str | None, float | None]]:
             label = labels[idx] if idx < len(labels) else None
             score = float(probs[2] - probs[0]) if len(probs) >= 3 else float(simple_sentiment(""))
             results.append((score, label, confidence))
-        return results
+        return results, False
     except Exception:
-        return [(r.score, r.label, r.confidence) for r in _stub_predict(texts)]
+        return [(r.score, r.label, r.confidence) for r in _stub_predict(texts)], True

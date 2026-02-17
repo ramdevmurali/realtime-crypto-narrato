@@ -33,16 +33,13 @@ def build_news_msg(
     entry,
     seen_cache: dict[str, datetime],
     seen_order: deque[str],
+    pending: set[str | None],
     seen_now,
-) -> tuple[bool, NewsMsg | None]:
+) -> tuple[bool, NewsMsg | None, str | None]:
     uid = entry.get('id') or entry.get('link') or entry.get('title')
-    if uid in seen_cache:
-        return False, None
-    seen_cache[uid] = seen_now
-    seen_order.append(uid)
-    if len(seen_order) > settings.rss_seen_max:
-        oldest = seen_order.popleft()
-        seen_cache.pop(oldest, None)
+    if uid in seen_cache or uid in pending:
+        return False, None, None
+    pending.add(uid)
 
     published = entry.get('published') or entry.get('updated')
     ts = dateparser.parse(published) if published else now_utc()
@@ -51,7 +48,15 @@ def build_news_msg(
     source = entry.get('source', {}).get('title') if entry.get('source') else settings.rss_default_source
     sentiment = simple_sentiment(title)
     msg = NewsMsg(time=ts, title=title, url=url, source=source, sentiment=sentiment)
-    return True, msg
+    return True, msg, uid
+
+
+def mark_seen(uid: str | None, seen_cache: dict[str, datetime], seen_order: deque[str], seen_now) -> None:
+    seen_cache[uid] = seen_now
+    seen_order.append(uid)
+    if len(seen_order) > settings.rss_seen_max:
+        oldest = seen_order.popleft()
+        seen_cache.pop(oldest, None)
 
 
 async def publish_news_msg(processor: ProcessorState, msg: NewsMsg) -> None:
@@ -120,6 +125,7 @@ async def news_ingest_task(processor: ProcessorState):
     log = getattr(processor, "log", get_logger(__name__))
     seen_cache: dict[str, datetime] = {}
     seen_order: deque[str] = deque()
+    pending: set[str | None] = set()
     attempt = 0
     failures = 0
     news_messages_sent = 0
@@ -131,9 +137,15 @@ async def news_ingest_task(processor: ProcessorState):
             seen_now = now_utc()
             _prune_seen(seen_cache, seen_order, seen_now)
             for entry in feed.entries[:settings.news_batch_limit]:
-                sent, msg = build_news_msg(entry, seen_cache, seen_order, seen_now)
+                sent, msg, uid = build_news_msg(entry, seen_cache, seen_order, pending, seen_now)
                 if sent and msg:
-                    await publish_news_msg(processor, msg)
+                    try:
+                        await publish_news_msg(processor, msg)
+                    except Exception:
+                        pending.discard(uid)
+                        raise
+                    mark_seen(uid, seen_cache, seen_order, seen_now)
+                    pending.discard(uid)
                     news_messages_sent += 1
                     if news_messages_sent % settings.news_publish_log_every == 0:
                         log.info("news_published_count", extra={"count": news_messages_sent})

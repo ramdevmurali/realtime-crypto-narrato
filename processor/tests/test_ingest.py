@@ -52,6 +52,7 @@ def test_build_news_msg_dedupes():
     proc = FakeProcessor()
     seen_cache = {}
     seen_order = deque()
+    pending = set()
     entry = {
         "id": "abc",
         "title": "Breaking",
@@ -62,12 +63,14 @@ def test_build_news_msg_dedupes():
     seen_now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
 
     # first time should publish
-    published, msg = ingest.build_news_msg(entry, seen_cache, seen_order, seen_now)
+    published, msg, uid = ingest.build_news_msg(entry, seen_cache, seen_order, pending, seen_now)
     assert published is True
     assert msg is not None
+    ingest.mark_seen(uid, seen_cache, seen_order, seen_now)
+    pending.discard(uid)
 
     # second time same id should skip
-    published, msg = ingest.build_news_msg(entry, seen_cache, seen_order, seen_now)
+    published, msg, _ = ingest.build_news_msg(entry, seen_cache, seen_order, pending, seen_now)
     assert published is False
     assert msg is None
 
@@ -79,6 +82,7 @@ def test_build_news_msg_ttl_eviction(monkeypatch):
     proc = FakeProcessor()
     seen_cache = {"abc": datetime(2026, 1, 27, 11, 0, tzinfo=timezone.utc)}
     seen_order = deque(["abc"])
+    pending = set()
     now_ts = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
     ingest._prune_seen(seen_cache, seen_order, now_ts)
     assert "abc" not in seen_cache
@@ -90,9 +94,11 @@ def test_build_news_msg_ttl_eviction(monkeypatch):
         "published": "2026-01-27T12:00:00Z",
         "source": {"title": "rss"},
     }
-    published, msg = ingest.build_news_msg(entry, seen_cache, seen_order, now_ts)
+    published, msg, uid = ingest.build_news_msg(entry, seen_cache, seen_order, pending, now_ts)
     assert published is True
     assert msg is not None
+    ingest.mark_seen(uid, seen_cache, seen_order, now_ts)
+    pending.discard(uid)
 
 
 def test_build_news_msg_max_cap(monkeypatch):
@@ -102,6 +108,7 @@ def test_build_news_msg_max_cap(monkeypatch):
     proc = FakeProcessor()
     seen_cache = {}
     seen_order = deque()
+    pending = set()
     now_ts = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
 
     for i in range(3):
@@ -112,9 +119,11 @@ def test_build_news_msg_max_cap(monkeypatch):
             "published": "2026-01-27T12:00:00Z",
             "source": {"title": "rss"},
         }
-        published, msg = ingest.build_news_msg(entry, seen_cache, seen_order, now_ts + timedelta(seconds=i))
+        published, msg, uid = ingest.build_news_msg(entry, seen_cache, seen_order, pending, now_ts + timedelta(seconds=i))
         assert published is True
         assert msg is not None
+        ingest.mark_seen(uid, seen_cache, seen_order, now_ts + timedelta(seconds=i))
+        pending.discard(uid)
 
     assert len(seen_cache) == 2
     assert len(seen_order) == 2
@@ -138,7 +147,7 @@ async def test_publish_news_msg_inserts_and_publishes(monkeypatch):
         "source": {"title": "rss"},
     }
     seen_now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
-    published, msg = ingest.build_news_msg(entry, {}, deque(), seen_now)
+    published, msg, _ = ingest.build_news_msg(entry, {}, deque(), set(), seen_now)
     assert published is True
     assert msg is not None
 
@@ -146,6 +155,30 @@ async def test_publish_news_msg_inserts_and_publishes(monkeypatch):
     assert len(calls) == 1
     assert len(proc.producer.sent) == 1
     assert proc.latest_headline[0] == "Breaking"
+
+
+def test_build_news_msg_retry_after_failure():
+    seen_cache = {}
+    seen_order = deque()
+    pending = set()
+    entry = {
+        "id": "abc",
+        "title": "Breaking",
+        "link": "http://example.com",
+        "published": "2026-01-27T12:00:00Z",
+        "source": {"title": "rss"},
+    }
+    seen_now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+
+    published, msg, uid = ingest.build_news_msg(entry, seen_cache, seen_order, pending, seen_now)
+    assert published is True
+    assert msg is not None
+    # simulate failure: clear pending without marking seen
+    pending.discard(uid)
+
+    published, msg, _ = ingest.build_news_msg(entry, seen_cache, seen_order, pending, seen_now)
+    assert published is True
+    assert msg is not None
 
 
 @pytest.mark.asyncio

@@ -70,6 +70,7 @@ class Settings(BaseSettings):
     return_percentile_high: float = 0.95  # percentiles for return bands
     sentiment_pos_threshold: float = 0.2
     sentiment_neg_threshold: float = -0.2
+    sentiment_max_seq_len: int = 512
     alert_log_every: int = 50  # cadence for alert count logs
 
     headline_max_age_sec: int = 900  # max age for attaching latest headline
@@ -154,6 +155,7 @@ class Settings(BaseSettings):
         "retry_backoff_base_sec",
         "retry_backoff_cap_sec",
         "sentiment_batch_size",
+        "sentiment_max_seq_len",
     )
     @classmethod
     def _positive(cls, v):

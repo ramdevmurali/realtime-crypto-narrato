@@ -81,7 +81,7 @@ def _encode_light(tokenizer, texts: List[str], input_names: set[str]):
     if not encodings:
         return {}
     max_len = max(len(enc.ids) for enc in encodings)
-    max_len = min(max_len, 512)
+    max_len = min(max_len, settings.sentiment_max_seq_len)
     pad_id = tokenizer.token_to_id("[PAD]") or 0
     input_ids = np.full((len(encodings), max_len), pad_id, dtype=np.int64)
     attention_mask = np.zeros((len(encodings), max_len), dtype=np.int64)

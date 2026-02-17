@@ -126,6 +126,7 @@ curl -N 'http://localhost:8000/headlines/stream?limit=5&interval=2'
 - Metrics tuning: `EWMA_Z_CAP`, `PERCENTILE_MIN_SAMPLES`.
 - Alert logging: `ALERT_LOG_EVERY`.
 - Summary sidecar: `SUMMARY_LLM_CONCURRENCY`.
+- LLM generation: `LLM_MAX_TOKENS`, `LLM_TEMPERATURE`.
 - RSS dedupe: `RSS_SEEN_TTL_SEC`, `RSS_SEEN_MAX`.
 - Sentiment sidecar: `SENTIMENT_PROVIDER`, `SENTIMENT_MODEL_PATH`, `SENTIMENT_BATCH_SIZE`,
   `SENTIMENT_MAX_LATENCY_MS`, `SENTIMENT_FALLBACK_ON_SLOW`, `SENTIMENT_FAIL_FAST`,

@@ -81,6 +81,8 @@ class Settings(BaseSettings):
     window_history_maxlen: int = 300  # max samples to keep for z-score history
 
     llm_provider: str = "stub"  # stub|openai|google
+    llm_max_tokens: int = 80
+    llm_temperature: float = 0.3
     openai_api_key: str | None = None
     google_api_key: str | None = None
     google_model: str = "gemini-2.5-flash"
@@ -154,6 +156,7 @@ class Settings(BaseSettings):
         "retry_max_attempts",
         "retry_backoff_base_sec",
         "retry_backoff_cap_sec",
+        "llm_max_tokens",
         "sentiment_batch_size",
         "sentiment_max_seq_len",
     )
@@ -200,6 +203,13 @@ class Settings(BaseSettings):
             return v
         if v <= 0:
             raise ValueError("must be positive")
+        return v
+
+    @field_validator("llm_temperature")
+    @classmethod
+    def _llm_temperature_range(cls, v):
+        if not (0 <= v <= 2):
+            raise ValueError("llm_temperature must be in [0,2]")
         return v
 
     @field_validator("sentiment_pos_threshold")

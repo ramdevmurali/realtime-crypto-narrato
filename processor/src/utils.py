@@ -55,8 +55,8 @@ def llm_summarize(provider: str, api_key: Optional[str], symbol: str, window: st
             resp = openai.ChatCompletion.create(
                 model=settings.openai_model,
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=80,
-                temperature=0.3,
+                max_tokens=settings.llm_max_tokens,
+                temperature=settings.llm_temperature,
             )
             return resp.choices[0].message["content"].strip()
         if provider == "google":

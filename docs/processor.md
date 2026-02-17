@@ -131,6 +131,7 @@ curl -N 'http://localhost:8000/headlines/stream?limit=5&interval=2'
 - Alert logging: `ALERT_LOG_EVERY`.
 - Summary sidecar: `SUMMARY_LLM_CONCURRENCY`.
 - LLM generation: `LLM_MAX_TOKENS`, `LLM_TEMPERATURE`.
+- LLM fallback logging: `LLM_FALLBACK_LOG_EVERY` and counter `llm_fallbacks`.
 - Anomaly hot path summary: `ANOMALY_HOTPATH_STUB_SUMMARY` (default true for low latency).
 - RSS dedupe: `RSS_SEEN_TTL_SEC`, `RSS_SEEN_MAX`.
 - RSS defaults: `RSS_DEFAULT_TITLE`, `RSS_DEFAULT_SOURCE`.

@@ -89,6 +89,7 @@ class Settings(BaseSettings):
     llm_provider: str = "stub"  # stub|openai|google
     llm_max_tokens: int = 80
     llm_temperature: float = 0.3
+    llm_fallback_log_every: int = 100
     anomaly_hotpath_stub_summary: bool = True
     openai_api_key: str | None = None
     google_api_key: str | None = None
@@ -168,6 +169,7 @@ class Settings(BaseSettings):
         "retry_jitter_min",
         "retry_jitter_max",
         "llm_max_tokens",
+        "llm_fallback_log_every",
         "sentiment_batch_size",
         "sentiment_max_seq_len",
         "sentiment_fallback_log_every",

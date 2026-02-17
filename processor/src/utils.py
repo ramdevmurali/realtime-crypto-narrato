@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import random
 import asyncio
 from typing import Optional
+from .logging_config import get_logger
 try:
     from .config import settings
 except ImportError:
@@ -11,6 +12,7 @@ except ImportError:
 
 POSITIVE_WORDS = {"surge", "gain", "up", "bull", "approval", "positive", "green"}
 NEGATIVE_WORDS = {"drop", "loss", "down", "bear", "selloff", "crash", "negative"}
+log = get_logger(__name__)
 
 
 def now_utc() -> datetime:
@@ -70,7 +72,17 @@ def llm_summarize(provider: str, api_key: Optional[str], symbol: str, window: st
             resp = genai.GenerativeModel(settings.google_model).generate_content(prompt)
             # google client returns .text on success
             return resp.text.strip() if hasattr(resp, "text") and resp.text else base_summary
-    except Exception:
+    except Exception as exc:
+        from .metrics import get_metrics
+
+        metrics = get_metrics()
+        metrics.inc("llm_fallbacks")
+        fallback_count = metrics.snapshot()["counters"].get("llm_fallbacks", 0)
+        if fallback_count == 1 or fallback_count % settings.llm_fallback_log_every == 0:
+            log.warning(
+                "llm_fallback_used",
+                extra={"provider": provider, "error": str(exc), "fallbacks": fallback_count},
+            )
         # fall back to stub summary if any API/import/network error
         return base_summary
 

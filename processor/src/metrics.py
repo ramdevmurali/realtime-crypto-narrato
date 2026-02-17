@@ -58,3 +58,13 @@ class MetricsRegistry:
             "counters": counters,
             "rolling": rolling,
         }
+
+
+_GLOBAL_METRICS: MetricsRegistry | None = None
+
+
+def get_metrics() -> MetricsRegistry:
+    global _GLOBAL_METRICS
+    if _GLOBAL_METRICS is None:
+        _GLOBAL_METRICS = MetricsRegistry()
+    return _GLOBAL_METRICS

@@ -108,6 +108,7 @@ curl -N 'http://localhost:8000/headlines/stream?limit=5&interval=2'
 
 ## Window/Retention Policy
 - Window labels and durations are configured via `WINDOW_LABELS` (default `1m,5m,15m`).
+- Window history size for z-score history is `WINDOW_HISTORY_MAXLEN` (default `300`).
 - Prune horizon is derived from the largest window plus the resample step:
   `max_window + VOL_RESAMPLE_SEC`.
 - Returns/vol are **strict-window**: prices outside the window are not used.

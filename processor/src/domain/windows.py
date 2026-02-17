@@ -7,11 +7,11 @@ from ..config import settings, get_windows
 
 
 class PriceWindow:
-    def __init__(self, history_maxlen: int = 300):
+    def __init__(self, history_maxlen: int | None = None):
         self.buffer: List[Tuple[datetime, float]] = []
         # per-window smoothed z-score state
         self.z_ewma = {}
-        self.history_maxlen = history_maxlen
+        self.history_maxlen = history_maxlen if history_maxlen is not None else settings.window_history_maxlen
         self.return_history: dict[str, Deque[float]] = {}
         self.vol_history: dict[str, Deque[float]] = {}
 
@@ -41,7 +41,7 @@ class PriceWindow:
 
     def _prune(self, ts: datetime):
         windows = get_windows()
-        max_window = max(windows.values()) if windows else timedelta(minutes=15)
+        max_window = max(windows.values())
         cutoff = ts - (max_window + timedelta(seconds=settings.vol_resample_sec))
         idx = 0
         while idx < len(self.buffer) and self.buffer[idx][0] < cutoff:

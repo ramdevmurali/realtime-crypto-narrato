@@ -72,6 +72,7 @@ class Settings(BaseSettings):
     rss_seen_max: int = 5000  # max cached RSS IDs
     window_max_gap_factor: float = 1.5  # max allowed gap vs window size
     vol_resample_sec: int = 5  # cadence for resampling prices in vol calc
+    window_history_maxlen: int = 300  # max samples to keep for z-score history
 
     llm_provider: str = "stub"  # stub|openai|google
     openai_api_key: str | None = None
@@ -121,6 +122,7 @@ class Settings(BaseSettings):
         "rss_seen_max",
         "window_max_gap_factor",
         "vol_resample_sec",
+        "window_history_maxlen",
         "anomaly_cooldown_sec",
         "bad_price_log_every",
         "late_price_log_every",
@@ -191,6 +193,8 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _validate_windows_and_percentiles(self):
         labels = [l.strip().lower() for l in _csv(self.window_labels_raw, ["1m", "5m", "15m"])]
+        if not labels:
+            raise ValueError("window_labels_raw must not be empty")
         if len(set(labels)) != len(labels):
             raise ValueError("window_labels_raw must be unique")
         for label in labels:

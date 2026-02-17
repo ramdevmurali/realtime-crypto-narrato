@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     binance_stream: str = "wss://stream.binance.com:9443/stream"
     symbols_raw: str = "btcusdt,ethusdt"
     news_rss: str = "https://www.coindesk.com/arc/outboundfeeds/rss/"
+    rss_default_title: str = "untitled"
+    rss_default_source: str = "rss"
 
     alert_threshold_1m: float = 0.05
     alert_threshold_5m: float = 0.08

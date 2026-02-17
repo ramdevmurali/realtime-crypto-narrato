@@ -47,9 +47,9 @@ async def process_feed_entry(
 
     published = entry.get('published') or entry.get('updated')
     ts = dateparser.parse(published) if published else now_utc()
-    title = entry.get('title', 'untitled')
+    title = entry.get('title', settings.rss_default_title)
     url = entry.get('link')
-    source = entry.get('source', {}).get('title') if entry.get('source') else "rss"
+    source = entry.get('source', {}).get('title') if entry.get('source') else settings.rss_default_source
     sentiment = simple_sentiment(title)
     msg = NewsMsg(time=ts, title=title, url=url, source=source, sentiment=sentiment)
     await with_retries(insert_headline, ts, title, source, url, sentiment, log=getattr(processor, "log", None), op="insert_headline")

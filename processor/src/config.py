@@ -30,6 +30,7 @@ class Settings(BaseSettings):
 
     database_url: str = "postgres://postgres:postgres@timescaledb:5432/anomalies"
     kafka_brokers_raw: str = "redpanda:29092"
+    kafka_auto_offset_reset: str = "latest"
     redis_url: str | None = "redis://redis:6379/0"
 
     binance_stream: str = "wss://stream.binance.com:9443/stream"
@@ -191,6 +192,13 @@ class Settings(BaseSettings):
     def _sentiment_provider_allowed(cls, v):
         if v not in {"stub", "onnx"}:
             raise ValueError("sentiment_provider must be one of: stub, onnx")
+        return v
+
+    @field_validator("kafka_auto_offset_reset")
+    @classmethod
+    def _kafka_offset_reset_allowed(cls, v):
+        if v not in {"latest", "earliest"}:
+            raise ValueError("kafka_auto_offset_reset must be latest or earliest")
         return v
 
     @field_validator("sentiment_max_latency_ms")

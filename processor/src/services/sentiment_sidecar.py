@@ -251,7 +251,7 @@ class SentimentSidecar(SidecarRuntime, RuntimeService):
             settings.news_topic,
             bootstrap_servers=settings.kafka_brokers,
             enable_auto_commit=False,
-            auto_offset_reset="latest",
+            auto_offset_reset=settings.kafka_auto_offset_reset,
             group_id=settings.sentiment_sidecar_group,
         )
 

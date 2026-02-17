@@ -31,7 +31,7 @@ class SummarySidecar(SidecarRuntime, RuntimeService):
             settings.summaries_topic,
             bootstrap_servers=settings.kafka_brokers,
             enable_auto_commit=False,
-            auto_offset_reset="latest",
+            auto_offset_reset=settings.kafka_auto_offset_reset,
             group_id=settings.summary_consumer_group,
         )
 

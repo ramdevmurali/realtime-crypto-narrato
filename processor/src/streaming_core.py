@@ -45,7 +45,7 @@ class StreamProcessor(RuntimeService):
             bootstrap_servers=settings.kafka_brokers,
             group_id="processor",
             enable_auto_commit=False,
-            auto_offset_reset="latest",
+            auto_offset_reset=settings.kafka_auto_offset_reset,
         )
         await self.consumer.start()
 

@@ -208,7 +208,13 @@ class SentimentSidecar(SidecarRuntime, RuntimeService):
     async def start(self) -> None:
         self.log.info(
             "sentiment_sidecar_start",
-            extra={"brokers": settings.kafka_brokers, "topic": settings.news_topic},
+            extra={
+                "brokers": settings.kafka_brokers,
+                "topic": settings.news_topic,
+                "sentiment_provider": settings.sentiment_provider,
+                "sentiment_model_path": settings.sentiment_model_path,
+                "tokenizer_type": "tokenizers" if settings.sentiment_light_runtime else "transformers",
+            },
         )
 
         if settings.sentiment_provider == "onnx":

@@ -50,8 +50,27 @@ async def check_anomalies(processor: ProcessorState, symbol: str, ts: datetime, 
             summary = llm_summarize(settings.llm_provider, api_key, event.symbol, event.window, event.ret, event.headline, event.sentiment)
         event.summary_stub = summary
 
+        event_id = f"{event.time.isoformat()}:{event.symbol}:{event.window}"
+        inserted = await with_retries(
+            insert_anomaly,
+            event.time,
+            event.symbol,
+            event.window,
+            event.direction,
+            event.ret,
+            event.threshold,
+            event.headline,
+            event.sentiment,
+            summary,
+            log=log,
+            op="insert_anomaly",
+        )
+        if not inserted:
+            log.info("anomaly_duplicate_skipped", extra={"event_id": event_id})
+            continue
+
         summary_req = SummaryRequestMsg(
-            event_id=f"{event.time.isoformat()}:{event.symbol}:{event.window}",
+            event_id=event_id,
             time=event.time.isoformat(),
             symbol=event.symbol,
             window=event.window,
@@ -63,7 +82,7 @@ async def check_anomalies(processor: ProcessorState, symbol: str, ts: datetime, 
         )
 
         alert_msg = AlertMsg(
-            event_id=f"{event.time.isoformat()}:{event.symbol}:{event.window}",
+            event_id=event_id,
             time=event.time.isoformat(),
             symbol=event.symbol,
             window=event.window,
@@ -81,20 +100,6 @@ async def check_anomalies(processor: ProcessorState, symbol: str, ts: datetime, 
             summary_req.to_bytes(),
             log=log,
             op="send_summary_request",
-        )
-        await with_retries(
-            insert_anomaly,
-            event.time,
-            event.symbol,
-            event.window,
-            event.direction,
-            event.ret,
-            event.threshold,
-            event.headline,
-            event.sentiment,
-            summary,
-            log=log,
-            op="insert_anomaly",
         )
         await with_retries(
             producer.send_and_wait,

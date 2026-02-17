@@ -234,14 +234,15 @@ async def insert_headline(time, title, source, url, sentiment):
         )
 
 
-async def insert_anomaly(time, symbol, window, direction, ret, threshold, headline, sentiment, summary):
+async def insert_anomaly(time, symbol, window, direction, ret, threshold, headline, sentiment, summary) -> bool:
     pool = await get_pool()
     async with pool.acquire() as conn:
-        await conn.execute(
+        row = await conn.fetchval(
             """
             INSERT INTO anomalies(time, symbol, window_name, direction, return_value, threshold, headline, sentiment, summary)
             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)
             ON CONFLICT DO NOTHING
+            RETURNING 1
             """,
             time,
             symbol,
@@ -253,6 +254,7 @@ async def insert_anomaly(time, symbol, window, direction, ret, threshold, headli
             sentiment,
             summary,
         )
+        return row is not None
 
 
 async def close_pool():

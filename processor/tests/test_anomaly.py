@@ -34,6 +34,7 @@ async def test_check_anomalies_triggers_and_updates_state(monkeypatch):
 
     async def fake_insert_anomaly(*args, **kwargs):
         calls.append(args)
+        return True
 
     monkeypatch.setattr(anomaly_service, "insert_anomaly", fake_insert_anomaly)
 
@@ -60,6 +61,7 @@ async def test_check_anomalies_below_threshold_no_alert(monkeypatch):
 
     async def fake_insert_anomaly(*args, **kwargs):
         calls.append(args)
+        return True
 
     monkeypatch.setattr(anomaly_service, "insert_anomaly", fake_insert_anomaly)
 
@@ -80,6 +82,7 @@ async def test_check_anomalies_respects_rate_limit(monkeypatch):
 
     async def fake_insert_anomaly(*args, **kwargs):
         calls.append(args)
+        return True
 
     monkeypatch.setattr(anomaly_service, "insert_anomaly", fake_insert_anomaly)
 
@@ -102,6 +105,7 @@ async def test_check_anomalies_direction_up_down(monkeypatch):
 
     async def fake_insert_anomaly(*args, **kwargs):
         calls.append(args)
+        return True
 
     monkeypatch.setattr(anomaly_service, "insert_anomaly", fake_insert_anomaly)
 
@@ -129,6 +133,7 @@ async def test_check_anomalies_includes_latest_headline_and_sentiment(monkeypatc
 
     async def fake_insert_anomaly(*args, **kwargs):
         calls.append(args)
+        return True
 
     monkeypatch.setattr(anomaly_service, "insert_anomaly", fake_insert_anomaly)
 
@@ -151,6 +156,7 @@ async def test_check_anomalies_omits_stale_headline(monkeypatch):
 
     async def fake_insert_anomaly(*args, **kwargs):
         calls.append(args)
+        return True
 
     monkeypatch.setattr(anomaly_service, "insert_anomaly", fake_insert_anomaly)
 
@@ -172,6 +178,7 @@ async def test_check_anomalies_no_metrics_no_alert(monkeypatch):
 
     async def fake_insert_anomaly(*args, **kwargs):
         calls.append(args)
+        return True
 
     monkeypatch.setattr(anomaly_service, "insert_anomaly", fake_insert_anomaly)
 
@@ -182,4 +189,21 @@ async def test_check_anomalies_no_metrics_no_alert(monkeypatch):
 
     assert len(proc.producer.sent) == 0
     assert len(calls) == 0
+    assert proc.last_alert == {}
+
+
+@pytest.mark.asyncio
+async def test_check_anomalies_skips_duplicate_inserts(monkeypatch):
+    async def fake_insert_anomaly(*args, **kwargs):
+        return False
+
+    monkeypatch.setattr(anomaly_service, "insert_anomaly", fake_insert_anomaly)
+
+    proc = FakeProcessor()
+    ts = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+    metrics = {"return_1m": settings.alert_threshold_1m + 0.02}
+
+    await anomaly_service.check_anomalies(proc, "btcusdt", ts, metrics)
+
+    assert len(proc.producer.sent) == 0
     assert proc.last_alert == {}

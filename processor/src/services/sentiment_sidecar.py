@@ -62,7 +62,7 @@ def _fallback_results(titles: List[str]) -> List[Tuple[float, None, None]]:
     return [(float(simple_sentiment(title)), None, None) for title in titles]
 
 
-async def process_sentiment_batch(messages: Iterable, consumer, producer, pool, log):
+async def persist_and_publish_sentiment_batch(messages: Iterable, consumer, producer, pool, log):
     parsed: List[Tuple[object, NewsMsg]] = []
     for msg in messages:
         try:
@@ -267,7 +267,7 @@ class SentimentSidecar(SidecarRuntime, RuntimeService):
                 )
                 messages = [msg for batch in msg_batch.values() for msg in batch]
                 if messages:
-                    await process_sentiment_batch(messages, self._consumer, self._producer, self._pool, self.log)
+                    await persist_and_publish_sentiment_batch(messages, self._consumer, self._producer, self._pool, self.log)
                 await asyncio.sleep(0)  # yield
         finally:
             await self._shutdown()

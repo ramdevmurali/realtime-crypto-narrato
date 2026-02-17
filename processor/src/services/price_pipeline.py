@@ -23,19 +23,28 @@ async def process_price(proc: ProcessorState, symbol: str, price: float, ts) -> 
         raise PipelineError("insert_price", exc) from exc
 
     if inserted:
-        win = proc.price_windows[symbol]
-        win.add(ts, price)
-        metrics = compute_metrics(proc.price_windows, symbol, ts)
-        if metrics:
-            try:
-                await with_retries(insert_metric, ts, symbol, metrics, log=proc.log, op="insert_metric")
-            except Exception as exc:
-                proc.log.error("metric_insert_failed", extra={"error": str(exc), "symbol": symbol})
-                raise PipelineError("insert_metric", exc) from exc
-        try:
-            await check_anomalies(proc, symbol, ts, metrics or {})
-        except Exception as exc:
-            proc.log.error("anomaly_check_failed", extra={"error": str(exc), "symbol": symbol})
-            raise PipelineError("check_anomalies", exc) from exc
+        _, metrics = compute_price_metrics(proc, symbol, price, ts)
+        await persist_and_publish_price(proc, symbol, ts, metrics)
 
     return inserted
+
+
+def compute_price_metrics(proc: ProcessorState, symbol: str, price: float, ts) -> tuple[bool, dict | None]:
+    win = proc.price_windows[symbol]
+    win.add(ts, price)
+    metrics = compute_metrics(proc.price_windows, symbol, ts)
+    return True, metrics
+
+
+async def persist_and_publish_price(proc: ProcessorState, symbol: str, ts, metrics: dict | None) -> None:
+    if metrics:
+        try:
+            await with_retries(insert_metric, ts, symbol, metrics, log=proc.log, op="insert_metric")
+        except Exception as exc:
+            proc.log.error("metric_insert_failed", extra={"error": str(exc), "symbol": symbol})
+            raise PipelineError("insert_metric", exc) from exc
+    try:
+        await check_anomalies(proc, symbol, ts, metrics or {})
+    except Exception as exc:
+        proc.log.error("anomaly_check_failed", extra={"error": str(exc), "symbol": symbol})
+        raise PipelineError("check_anomalies", exc) from exc

@@ -29,7 +29,7 @@ def _prune_seen(seen_cache: dict[str, datetime], seen_order: deque[str], now_ts)
         seen_cache.pop(oldest, None)
 
 
-async def process_feed_entry(
+async def persist_and_publish_feed_entry(
     processor: ProcessorState,
     entry,
     seen_cache: dict[str, datetime],
@@ -114,7 +114,7 @@ async def news_ingest_task(processor: ProcessorState):
             seen_now = now_utc()
             _prune_seen(seen_cache, seen_order, seen_now)
             for entry in feed.entries[:settings.news_batch_limit]:
-                sent = await process_feed_entry(processor, entry, seen_cache, seen_order, seen_now)
+                sent = await persist_and_publish_feed_entry(processor, entry, seen_cache, seen_order, seen_now)
                 if sent:
                     news_messages_sent += 1
                     if news_messages_sent % settings.news_publish_log_every == 0:

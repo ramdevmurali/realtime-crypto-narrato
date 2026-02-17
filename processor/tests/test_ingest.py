@@ -67,13 +67,13 @@ async def test_process_feed_entry_dedupes(monkeypatch):
     seen_now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
 
     # first time should publish
-    published = await ingest.process_feed_entry(proc, entry, seen_cache, seen_order, seen_now)
+    published = await ingest.persist_and_publish_feed_entry(proc, entry, seen_cache, seen_order, seen_now)
     assert published is True
     assert len(proc.producer.sent) == 1
     assert len(calls) == 1
 
     # second time same id should skip
-    published = await ingest.process_feed_entry(proc, entry, seen_cache, seen_order, seen_now)
+    published = await ingest.persist_and_publish_feed_entry(proc, entry, seen_cache, seen_order, seen_now)
     assert published is False
     assert len(proc.producer.sent) == 1
     assert len(calls) == 1
@@ -104,7 +104,7 @@ async def test_process_feed_entry_ttl_eviction(monkeypatch):
         "published": "2026-01-27T12:00:00Z",
         "source": {"title": "rss"},
     }
-    published = await ingest.process_feed_entry(proc, entry, seen_cache, seen_order, now_ts)
+    published = await ingest.persist_and_publish_feed_entry(proc, entry, seen_cache, seen_order, now_ts)
     assert published is True
 
 
@@ -132,7 +132,7 @@ async def test_process_feed_entry_max_cap(monkeypatch):
             "published": "2026-01-27T12:00:00Z",
             "source": {"title": "rss"},
         }
-        published = await ingest.process_feed_entry(proc, entry, seen_cache, seen_order, now_ts + timedelta(seconds=i))
+        published = await ingest.persist_and_publish_feed_entry(proc, entry, seen_cache, seen_order, now_ts + timedelta(seconds=i))
         assert published is True
 
     assert len(seen_cache) == 2

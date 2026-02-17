@@ -55,3 +55,59 @@ async def test_persist_and_publish_price_handles_none_metrics(monkeypatch):
 
     await price_pipeline.persist_and_publish_price(proc, "btcusdt", ts, None)
     assert calls["anomaly"] == {}
+
+
+@pytest.mark.asyncio
+async def test_process_price_rolls_back_on_metric_failure(monkeypatch):
+    proc = FakeProc()
+    ts = datetime(2026, 1, 1, 0, 0, tzinfo=timezone.utc)
+    win = proc.price_windows["btcusdt"]
+    win.add(ts - timedelta(seconds=30), 100.0)
+    snapshot = list(win.buffer)
+
+    async def fake_insert_price(*args, **kwargs):
+        return True
+
+    async def fail_insert_metric(*args, **kwargs):
+        raise RuntimeError("fail")
+
+    async def fail_check_anomalies(*args, **kwargs):
+        raise AssertionError("check_anomalies should not run")
+
+    monkeypatch.setattr(price_pipeline, "insert_price", fake_insert_price)
+    monkeypatch.setattr(price_pipeline, "insert_metric", fail_insert_metric)
+    monkeypatch.setattr(price_pipeline, "check_anomalies", fail_check_anomalies)
+
+    with pytest.raises(price_pipeline.PipelineError):
+        await price_pipeline.process_price(proc, "btcusdt", 110.0, ts)
+
+    assert win.buffer == snapshot
+    assert win.z_ewma == {}
+
+
+@pytest.mark.asyncio
+async def test_process_price_rolls_back_on_anomaly_failure(monkeypatch):
+    proc = FakeProc()
+    ts = datetime(2026, 1, 1, 0, 0, tzinfo=timezone.utc)
+    win = proc.price_windows["ethusdt"]
+    win.add(ts - timedelta(seconds=30), 200.0)
+    snapshot = list(win.buffer)
+
+    async def fake_insert_price(*args, **kwargs):
+        return True
+
+    async def ok_insert_metric(*args, **kwargs):
+        return None
+
+    async def fail_check_anomalies(*args, **kwargs):
+        raise RuntimeError("anomaly fail")
+
+    monkeypatch.setattr(price_pipeline, "insert_price", fake_insert_price)
+    monkeypatch.setattr(price_pipeline, "insert_metric", ok_insert_metric)
+    monkeypatch.setattr(price_pipeline, "check_anomalies", fail_check_anomalies)
+
+    with pytest.raises(price_pipeline.PipelineError):
+        await price_pipeline.process_price(proc, "ethusdt", 210.0, ts)
+
+    assert win.buffer == snapshot
+    assert win.z_ewma == {}

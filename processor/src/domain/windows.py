@@ -39,6 +39,32 @@ class PriceWindow:
         # drop anything older than 15m + small buffer
         self._prune(ts)
 
+    def snapshot(self):
+        return {
+            "buffer": list(self.buffer),
+            "z_ewma": dict(self.z_ewma),
+            "return_history": {
+                label: deque(values, maxlen=values.maxlen)
+                for label, values in self.return_history.items()
+            },
+            "vol_history": {
+                label: deque(values, maxlen=values.maxlen)
+                for label, values in self.vol_history.items()
+            },
+        }
+
+    def restore(self, snapshot) -> None:
+        self.buffer = list(snapshot.get("buffer", []))
+        self.z_ewma = dict(snapshot.get("z_ewma", {}))
+        self.return_history = {
+            label: deque(values, maxlen=values.maxlen)
+            for label, values in snapshot.get("return_history", {}).items()
+        }
+        self.vol_history = {
+            label: deque(values, maxlen=values.maxlen)
+            for label, values in snapshot.get("vol_history", {}).items()
+        }
+
     def _prune(self, ts: datetime):
         windows = get_windows()
         max_window = max(windows.values())

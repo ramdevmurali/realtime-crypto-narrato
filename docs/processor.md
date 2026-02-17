@@ -126,6 +126,7 @@ curl -N 'http://localhost:8000/headlines/stream?limit=5&interval=2'
   `RETRY_JITTER_MIN`, `RETRY_JITTER_MAX`.
 - Kafka consumer offset reset: `KAFKA_AUTO_OFFSET_RESET`.
 - Processor consumer group: `PROCESSOR_CONSUMER_GROUP`.
+- DB init on startup: `ENABLE_DB_INIT` (set false in prod to disable auto schema creation).
 - Metrics tuning: `EWMA_Z_CAP`, `PERCENTILE_MIN_SAMPLES`.
 - Alert logging: `ALERT_LOG_EVERY`.
 - Summary sidecar: `SUMMARY_LLM_CONCURRENCY`.

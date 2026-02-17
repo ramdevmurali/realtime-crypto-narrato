@@ -15,6 +15,9 @@ async def get_pool() -> asyncpg.Pool:
 
 
 async def init_tables():
+    if not settings.enable_db_init:
+        log.info("db_init_skipped")
+        return
     try:
         pool = await get_pool()
         async with pool.acquire() as conn:

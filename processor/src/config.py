@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     kafka_brokers_raw: str = "redpanda:29092"
     kafka_auto_offset_reset: str = "latest"
     redis_url: str | None = "redis://redis:6379/0"
+    enable_db_init: bool = True
 
     binance_stream: str = "wss://stream.binance.com:9443/stream"
     symbols_raw: str = "btcusdt,ethusdt"

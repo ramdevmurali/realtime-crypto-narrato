@@ -95,6 +95,6 @@ def compute_metrics(price_windows, symbol: str, ts):
             ratios.append(abs(r) / threshold)
     metrics["attention"] = max(ratios) if ratios else None
 
-    if all(metrics[f"return_{lbl}"] is None for lbl in ["1m", "5m", "15m"]):
+    if all(metrics.get(f"return_{lbl}") is None for lbl in windows.keys()):
         return None
     return metrics

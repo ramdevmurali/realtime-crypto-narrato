@@ -63,7 +63,9 @@ class Settings(BaseSettings):
     retry_backoff_base_sec: float = 1.0
     retry_backoff_cap_sec: float = 30.0
     ewma_return_alpha: float = 0.25  # smoothing for return z-scores
+    ewma_z_cap: float = 6.0  # clamp EWMA z-scores
     vol_z_spike_threshold: float = 3.0  # flag vol spikes
+    percentile_min_samples: int = 3  # minimum samples for percentile calc
     return_percentile_low: float = 0.05
     return_percentile_high: float = 0.95  # percentiles for return bands
 
@@ -114,7 +116,9 @@ class Settings(BaseSettings):
         "alert_threshold_5m",
         "alert_threshold_15m",
         "ewma_return_alpha",
+        "ewma_z_cap",
         "vol_z_spike_threshold",
+        "percentile_min_samples",
         "return_percentile_low",
         "return_percentile_high",
         "headline_max_age_sec",

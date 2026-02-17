@@ -30,7 +30,7 @@ def _zscore(value: float, series: List[float]):
     return (value - mean) / std
 
 
-def _ewma(prev: float | None, value: float | None, alpha: float, cap: float = 6.0):
+def _ewma(prev: float | None, value: float | None, alpha: float, cap: float):
     if value is None:
         return None
     smoothed = value if prev is None else prev + alpha * (value - prev)
@@ -70,7 +70,7 @@ def compute_metrics(price_windows, symbol: str, ts):
         metrics[f"return_z_{label}"] = _zscore(ret, ret_hist)
         # smoothed z per window
         raw_z = metrics[f"return_z_{label}"]
-        smoothed = _ewma(win.z_ewma.get(label), raw_z, settings.ewma_return_alpha)
+        smoothed = _ewma(win.z_ewma.get(label), raw_z, settings.ewma_return_alpha, settings.ewma_z_cap)
         win.z_ewma[label] = smoothed
         metrics[f"return_z_ewma_{label}"] = smoothed
         metrics[f"vol_z_{label}"] = _zscore(vol, vol_hist)
@@ -78,7 +78,7 @@ def compute_metrics(price_windows, symbol: str, ts):
         vz = metrics[f"vol_z_{label}"]
         metrics[f"vol_spike_{label}"] = vz is not None and vz > thr_spike
         # percentiles on returns
-        if len(ret_hist) >= 3:
+        if len(ret_hist) >= settings.percentile_min_samples:
             metrics[f"p05_return_{label}"] = _percentile(ret_hist, settings.return_percentile_low)
             metrics[f"p95_return_{label}"] = _percentile(ret_hist, settings.return_percentile_high)
         else:
@@ -88,10 +88,11 @@ def compute_metrics(price_windows, symbol: str, ts):
 
     ratios = []
     thr = get_thresholds()
-    for label in ["1m", "5m", "15m"]:
+    for label in windows.keys():
         r = metrics.get(f"return_{label}")
-        if r is not None and thr[label] > 0:
-            ratios.append(abs(r) / thr[label])
+        threshold = thr.get(label)
+        if r is not None and threshold and threshold > 0:
+            ratios.append(abs(r) / threshold)
     metrics["attention"] = max(ratios) if ratios else None
 
     if all(metrics[f"return_{lbl}"] is None for lbl in ["1m", "5m", "15m"]):

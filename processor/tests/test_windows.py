@@ -25,6 +25,17 @@ def test_price_window_prunes_old_points():
     assert kept_times == times[2:]
 
 
+def test_price_window_overwrites_same_timestamp():
+    win = PriceWindow()
+    ts = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+    win.add(ts, 100.0)
+    win.add(ts, 105.0)
+
+    assert len(win.buffer) == 1
+    assert win.buffer[0][0] == ts
+    assert win.buffer[0][1] == 105.0
+
+
 def test_get_return_happy_path():
     win = PriceWindow()
     now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)

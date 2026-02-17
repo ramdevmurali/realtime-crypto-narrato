@@ -27,7 +27,11 @@ class PriceWindow:
             self._history_deque(self.vol_history, label).append(vol)
 
     def add(self, ts: datetime, price: float):
-        if not self.buffer or ts >= self.buffer[-1][0]:
+        if not self.buffer:
+            self.buffer.append((ts, price))
+        elif ts == self.buffer[-1][0]:
+            self.buffer[-1] = (ts, price)
+        elif ts > self.buffer[-1][0]:
             self.buffer.append((ts, price))
         else:
             times = [t for t, _ in self.buffer]

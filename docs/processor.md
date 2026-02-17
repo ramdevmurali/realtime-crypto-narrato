@@ -40,6 +40,7 @@ Note: legacy folders like `processor/src/models` and `processor/src/processor/se
 - `prices(time, symbol, price, PK (time, symbol))`
 - `metrics(time, symbol, return_1m/5m/15m, vol_1m/5m/15m, return_z_1m/5m/15m, return_z_ewma_1m/5m/15m, vol_z_1m/5m/15m, vol_spike_1m/5m/15m, p05_return_1m/5m/15m, p95_return_1m/5m/15m, attention)`
 - `headlines(time, title, source, url, sentiment)`
+  - Note: the `headlines` table stores persisted records from the Kafka `news` topic (raw headline feed).
 - `anomalies(time, symbol, window_name, direction, return_value, threshold, headline, sentiment, summary)`
   - Note: the `anomalies` table stores persisted alert records.
 
@@ -55,6 +56,7 @@ Terminology note: the `metrics` table stores **price metrics** (returns/vol/z/pe
 Canonical payload models live in `processor/src/io/models/messages.py`.
 - `prices`: `symbol`, `price`, `time`
 - `news`: `time`, `title`, `source`, `sentiment` (optional: `url`)
+  - Note: `news` is the raw headline feed; it is persisted to the `headlines` table and represented by `NewsMsg` / `latest_headline` in code.
 - `summaries` (summary-request): `time`, `symbol`, `window`, `direction`, `ret`, `threshold` (optional: `headline`, `sentiment`)
 - `alerts`: `time`, `symbol`, `window`, `direction`, `ret`, `threshold`, `summary` (optional: `headline`, `sentiment`)
 - `news-enriched`: same as `news` plus optional `label`, `confidence` (sentiment sidecar output)
@@ -72,7 +74,7 @@ Non-goals for now:
 - `domain/anomaly.py`: inputs — symbol, timestamp, metrics; outputs — Timescale `anomalies`, Kafka `alerts`, Kafka `summaries` request.
 - `streaming_core.py`: orchestrator; owns Kafka producer/consumer, `price_windows`, `last_alert`, `latest_headline`, DLQ counters.
 - `services/summary_sidecar.py`: inputs — Kafka `summaries` requests; outputs — Timescale `anomalies` summary upsert, Kafka `alerts` enriched.
-- `services/sentiment_sidecar.py`: inputs — Kafka `news`; outputs — Timescale `headlines` sentiment overwrite, Kafka `news-enriched`.
+- `services/sentiment_sidecar.py`: inputs — Kafka `news` (headlines); outputs — Timescale `headlines` sentiment overwrite, Kafka `news-enriched`.
 
 ## How to run
 ```

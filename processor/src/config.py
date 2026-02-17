@@ -68,6 +68,8 @@ class Settings(BaseSettings):
     percentile_min_samples: int = 3  # minimum samples for percentile calc
     return_percentile_low: float = 0.05
     return_percentile_high: float = 0.95  # percentiles for return bands
+    sentiment_pos_threshold: float = 0.2
+    sentiment_neg_threshold: float = -0.2
     alert_log_every: int = 50  # cadence for alert count logs
 
     headline_max_age_sec: int = 900  # max age for attaching latest headline
@@ -196,6 +198,20 @@ class Settings(BaseSettings):
             return v
         if v <= 0:
             raise ValueError("must be positive")
+        return v
+
+    @field_validator("sentiment_pos_threshold")
+    @classmethod
+    def _positive_threshold(cls, v):
+        if v <= 0:
+            raise ValueError("must be positive")
+        return v
+
+    @field_validator("sentiment_neg_threshold")
+    @classmethod
+    def _negative_threshold(cls, v):
+        if v >= 0:
+            raise ValueError("must be negative")
         return v
 
     @model_validator(mode="after")

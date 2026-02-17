@@ -21,9 +21,9 @@ _MODEL_CACHE = {"session": None, "tokenizer": None}
 
 
 def _label_from_score(score: float) -> str:
-    if score > 0.2:
+    if score > settings.sentiment_pos_threshold:
         return "positive"
-    if score < -0.2:
+    if score < settings.sentiment_neg_threshold:
         return "negative"
     return "neutral"
 

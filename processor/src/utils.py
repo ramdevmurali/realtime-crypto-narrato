@@ -33,9 +33,9 @@ def llm_summarize(provider: str, api_key: Optional[str], symbol: str, window: st
     headline_part = f"Headline: {headline}" if headline else "No fresh headlines."
     sentiment_word = "neutral"
     if sentiment is not None:
-        if sentiment > 0.2:
+        if sentiment > settings.sentiment_pos_threshold:
             sentiment_word = "positive"
-        elif sentiment < -0.2:
+        elif sentiment < settings.sentiment_neg_threshold:
             sentiment_word = "negative"
 
     base_summary = f"{symbol.upper()} moved {magnitude} {direction} over {window}. {headline_part} Sentiment {sentiment_word}."

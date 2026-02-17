@@ -75,5 +75,10 @@ class StreamProcessor(ProcessorStateImpl, RuntimeService):
     async def send_price_dlq(self, payload: bytes):
         if not self.producer:
             return
-        with contextlib.suppress(Exception):
+        try:
             await self.producer.send_and_wait(settings.price_dlq_topic, payload)
+        except Exception as exc:
+            self.log.warning(
+                "price_dlq_failed",
+                extra={"error": str(exc), "payload_bytes": len(payload) if payload else 0},
+            )

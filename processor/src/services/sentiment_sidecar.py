@@ -18,9 +18,6 @@ from .sidecar_runtime import SidecarRuntime
 
 
 log = get_logger(__name__)
-METRICS = MetricsRegistry()
-
-
 async def _commit_message(consumer, msg, log):
     tp = TopicPartition(msg.topic, msg.partition)
     try:
@@ -62,15 +59,15 @@ def _fallback_results(titles: List[str]) -> List[Tuple[float, None, None]]:
     return [(float(simple_sentiment(title)), None, None) for title in titles]
 
 
-async def infer_sentiment_batch(messages: Iterable, consumer, producer, log):
+async def infer_sentiment_batch(messages: Iterable, consumer, producer, log, metrics: MetricsRegistry):
     parsed: List[Tuple[object, NewsMsg]] = []
     for msg in messages:
         try:
             payload = NewsMsg.model_validate_json(msg.value)
         except Exception as exc:
             log.warning("news_message_decode_failed", extra={"error": str(exc)})
-            METRICS.inc("sentiment_errors")
-            METRICS.inc("sentiment_dlq")
+            metrics.inc("sentiment_errors")
+            metrics.inc("sentiment_dlq")
             await _send_dlq(producer, msg.value, log)
             await _commit_message(consumer, msg, log)
             continue
@@ -79,7 +76,7 @@ async def infer_sentiment_batch(messages: Iterable, consumer, producer, log):
     if not parsed:
         return [], [], False, 0.0, 0.0
 
-    METRICS.inc("sentiment_batches")
+    metrics.inc("sentiment_batches")
     titles = [payload.title for _, payload in parsed]
     now = now_utc()
     lag_values = [max(0.0, (now - payload.time).total_seconds() * 1000) for _, payload in parsed]
@@ -94,10 +91,10 @@ async def infer_sentiment_batch(messages: Iterable, consumer, producer, log):
     except Exception:
         results = _fallback_results(titles)
         fallback_used = True
-        METRICS.inc("sentiment_errors")
+        metrics.inc("sentiment_errors")
     infer_ms = (time.perf_counter() - infer_start) * 1000
-    METRICS.observe("sentiment_infer_ms", infer_ms)
-    METRICS.observe("queue_lag_ms", queue_lag_ms)
+    metrics.observe("sentiment_infer_ms", infer_ms)
+    metrics.observe("queue_lag_ms", queue_lag_ms)
 
     if settings.sentiment_max_latency_ms and infer_ms > settings.sentiment_max_latency_ms:
         log.warning(
@@ -115,10 +112,10 @@ async def infer_sentiment_batch(messages: Iterable, consumer, producer, log):
         )
         results = _fallback_results(titles)
         fallback_used = True
-        METRICS.inc("sentiment_errors")
+        metrics.inc("sentiment_errors")
 
     if fallback_used:
-        METRICS.inc("sentiment_fallbacks")
+        metrics.inc("sentiment_fallbacks")
 
     log.info(
         "sentiment_batch_processed",
@@ -132,7 +129,7 @@ async def infer_sentiment_batch(messages: Iterable, consumer, producer, log):
     return parsed, results, fallback_used, infer_ms, queue_lag_ms
 
 
-async def persist_and_publish_sentiment_batch(parsed, results, producer, pool, consumer, log):
+async def persist_and_publish_sentiment_batch(parsed, results, producer, pool, consumer, log, metrics: MetricsRegistry):
     if not parsed:
         return
     for (msg, payload), (score, label, confidence) in zip(parsed, results):
@@ -164,8 +161,8 @@ async def persist_and_publish_sentiment_batch(parsed, results, producer, pool, c
             await _commit_message(consumer, msg, log)
         except Exception as exc:
             log.warning("sentiment_handle_failed", extra={"error": str(exc)})
-            METRICS.inc("sentiment_errors")
-            METRICS.inc("sentiment_dlq")
+            metrics.inc("sentiment_errors")
+            metrics.inc("sentiment_dlq")
             await _send_dlq(producer, msg.value, log)
             await _commit_message(consumer, msg, log)
 
@@ -174,6 +171,10 @@ class SentimentSidecar(SidecarRuntime, RuntimeService):
     def __init__(self):
         super().__init__(log, "sentiment_sidecar_stop")
         self._metrics_server: asyncio.AbstractServer | None = None
+        self.metrics = MetricsRegistry()
+
+    def reset(self) -> None:
+        self.metrics = MetricsRegistry()
 
     async def _handle_metrics(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         closed = False
@@ -194,7 +195,7 @@ class SentimentSidecar(SidecarRuntime, RuntimeService):
                 body = json.dumps({"error": "not found"}).encode()
                 status = "404 Not Found"
             else:
-                body = json.dumps(METRICS.snapshot()).encode()
+                body = json.dumps(self.metrics.snapshot()).encode()
                 status = "200 OK"
             headers = [
                 f"HTTP/1.1 {status}",
@@ -277,6 +278,7 @@ class SentimentSidecar(SidecarRuntime, RuntimeService):
                         self._consumer,
                         self._producer,
                         self.log,
+                        self.metrics,
                     )
                     await persist_and_publish_sentiment_batch(
                         parsed,
@@ -285,6 +287,7 @@ class SentimentSidecar(SidecarRuntime, RuntimeService):
                         self._pool,
                         self._consumer,
                         self.log,
+                        self.metrics,
                     )
                 await asyncio.sleep(0)  # yield
         finally:

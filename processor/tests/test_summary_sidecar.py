@@ -25,7 +25,6 @@ class FakeProducer:
 @pytest.mark.asyncio
 async def test_compute_summary(monkeypatch):
     monkeypatch.setattr(summary_sidecar, "llm_summarize", lambda *args, **kwargs: "LLM SUMMARY")
-    summary_sidecar._llm_semaphore = summary_sidecar.asyncio.Semaphore(1)
 
     payload = {
         "time": "2026-01-27T12:00:00+00:00",
@@ -38,7 +37,8 @@ async def test_compute_summary(monkeypatch):
         "sentiment": 0.1,
     }
 
-    summary = await summary_sidecar.compute_summary(payload, "stub", None)
+    semaphore = summary_sidecar.asyncio.Semaphore(1)
+    summary = await summary_sidecar.compute_summary(payload, "stub", None, semaphore)
     assert summary == "LLM SUMMARY"
 
 
@@ -87,7 +87,6 @@ async def test_persist_and_publish_summary_llm_failure(monkeypatch):
         raise RuntimeError("fail")
 
     monkeypatch.setattr(summary_sidecar, "llm_summarize", failing_llm)
-    summary_sidecar._llm_semaphore = summary_sidecar.asyncio.Semaphore(1)
 
     payload = {
         "time": "2026-01-27T12:00:00+00:00",
@@ -101,7 +100,7 @@ async def test_persist_and_publish_summary_llm_failure(monkeypatch):
     }
 
     with pytest.raises(RuntimeError):
-        await summary_sidecar.compute_summary(payload, "stub", None)
+        await summary_sidecar.compute_summary(payload, "stub", None, summary_sidecar.asyncio.Semaphore(1))
 
 
 @pytest.mark.asyncio
@@ -178,7 +177,14 @@ async def test_process_summary_record_sends_dlq_on_failure(monkeypatch):
     pool = FakePool()
     log = summary_sidecar.get_logger(__name__)
 
-    ok = await summary_sidecar.process_summary_record(FakeMsg(), consumer, producer, pool, log)
+    ok = await summary_sidecar.process_summary_record(
+        FakeMsg(),
+        consumer,
+        producer,
+        pool,
+        log,
+        summary_sidecar.asyncio.Semaphore(1),
+    )
     assert ok is False
     assert len(producer.sent) == 1
     topic, _ = producer.sent[0]

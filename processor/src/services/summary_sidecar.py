@@ -13,12 +13,15 @@ from .sidecar_runtime import SidecarRuntime
 
 
 log = get_logger(__name__)
-_llm_semaphore = asyncio.Semaphore(settings.summary_llm_concurrency)
 
 
 class SummarySidecar(SidecarRuntime, RuntimeService):
     def __init__(self):
         super().__init__(log, "summary_sidecar_stop")
+        self._llm_semaphore = asyncio.Semaphore(settings.summary_llm_concurrency)
+
+    def reset(self) -> None:
+        self._llm_semaphore = asyncio.Semaphore(settings.summary_llm_concurrency)
 
     async def start(self) -> None:
         self.log.info(
@@ -47,7 +50,14 @@ class SummarySidecar(SidecarRuntime, RuntimeService):
                 )
                 for tp, messages in msg_batch.items():
                     for msg in messages:
-                        await process_summary_record(msg, self._consumer, self._producer, self._pool, self.log)
+                        await process_summary_record(
+                            msg,
+                            self._consumer,
+                            self._producer,
+                            self._pool,
+                            self.log,
+                            self._llm_semaphore,
+                        )
                 await asyncio.sleep(0)  # yield control
         finally:
             await self._shutdown()
@@ -59,9 +69,9 @@ async def main():
     await sidecar.start()
 
 
-async def compute_summary(payload, llm_provider: str, api_key: str | None) -> str:
+async def compute_summary(payload, llm_provider: str, api_key: str | None, semaphore: asyncio.Semaphore) -> str:
     # Call LLM (with lightweight concurrency cap)
-    async with _llm_semaphore:
+    async with semaphore:
         return await asyncio.to_thread(
             llm_summarize,
             llm_provider,
@@ -120,7 +130,7 @@ async def _commit_message(consumer, msg, log):
         log.warning("summary_commit_failed", extra={"error": str(exc), "offset": msg.offset})
 
 
-async def process_summary_record(msg, consumer, producer, pool, log):
+async def process_summary_record(msg, consumer, producer, pool, log, semaphore: asyncio.Semaphore):
     try:
         payload = SummaryRequestMsg.model_validate_json(msg.value).model_dump()
         api_key = None
@@ -130,7 +140,7 @@ async def process_summary_record(msg, consumer, producer, pool, log):
             api_key = settings.google_api_key
 
         try:
-            summary = await compute_summary(payload, settings.llm_provider, api_key)
+            summary = await compute_summary(payload, settings.llm_provider, api_key, semaphore)
         except Exception as exc:
             log.exception(
                 "summary_llm_error",

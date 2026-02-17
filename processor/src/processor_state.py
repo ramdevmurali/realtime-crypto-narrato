@@ -11,13 +11,31 @@ from .config import settings
 from .domain.windows import PriceWindow
 
 
+class Publisher(Protocol):
+    async def send_and_wait(self, topic: str, payload: bytes) -> None: ...
+
+
+class Committer(Protocol):
+    async def commit(self, offsets=None) -> None: ...
+
+
+class Logger(Protocol):
+    def info(self, msg: str, extra: dict | None = None) -> None: ...
+
+    def warning(self, msg: str, extra: dict | None = None) -> None: ...
+
+    def error(self, msg: str, extra: dict | None = None) -> None: ...
+
+    def exception(self, msg: str, extra: dict | None = None) -> None: ...
+
+
 class ProcessorState(Protocol):
-    producer: AIOKafkaProducer | None
-    consumer: AIOKafkaConsumer | None
+    producer: Publisher | None
+    consumer: Committer | None
     price_windows: Dict[str, PriceWindow]
     last_alert: Dict[Tuple[str, str], datetime]
     latest_headline: Tuple[str | None, float | None, datetime | None]
-    log: Any
+    log: Logger
 
     bad_price_messages: int
     bad_price_log_every: int
@@ -46,7 +64,7 @@ class ProcessorStateImpl:
     price_windows: Dict[str, PriceWindow] = field(default_factory=lambda: defaultdict(PriceWindow))
     last_alert: Dict[Tuple[str, str], datetime] = field(default_factory=dict)
     latest_headline: Tuple[str | None, float | None, datetime | None] = (None, None, None)
-    log: Any = None
+    log: Logger | None = None
 
     bad_price_messages: int = 0
     bad_price_log_every: int = settings.bad_price_log_every

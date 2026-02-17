@@ -13,7 +13,7 @@ from .sidecar_runtime import SidecarRuntime
 
 
 log = get_logger(__name__)
-_llm_semaphore = asyncio.Semaphore(2)
+_llm_semaphore = asyncio.Semaphore(settings.summary_llm_concurrency)
 
 
 class SummarySidecar(SidecarRuntime, RuntimeService):

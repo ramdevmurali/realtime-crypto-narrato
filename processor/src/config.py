@@ -94,6 +94,7 @@ class Settings(BaseSettings):
     summary_consumer_group: str = "summary-sidecar"
     summary_poll_timeout_ms: int = 500
     summary_batch_max: int | None = None
+    summary_llm_concurrency: int = 2
 
     sentiment_provider: str = "stub"  # stub|onnx
     sentiment_model_path: str | None = None
@@ -146,6 +147,7 @@ class Settings(BaseSettings):
         "news_backoff_cap_sec",
         "news_poll_interval_sec",
         "news_batch_limit",
+        "summary_llm_concurrency",
         "retry_max_attempts",
         "retry_backoff_base_sec",
         "retry_backoff_cap_sec",

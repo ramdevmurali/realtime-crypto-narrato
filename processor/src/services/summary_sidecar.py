@@ -59,7 +59,7 @@ async def main():
     await sidecar.start()
 
 
-async def handle_summary_message(raw_value: bytes, producer, pool, log):
+async def persist_and_publish_summary(raw_value: bytes, producer, pool, log):
     payload = SummaryRequestMsg.model_validate_json(raw_value).model_dump()
     log.info("summary_request_received", extra=payload)
 
@@ -135,13 +135,13 @@ async def _commit_message(consumer, msg, log):
 async def process_summary_record(msg, consumer, producer, pool, log):
     try:
         await with_retries(
-            handle_summary_message,
+            persist_and_publish_summary,
             msg.value,
             producer,
             pool,
             log,
             log=log,
-            op="handle_summary_message",
+            op="persist_and_publish_summary",
         )
         await _commit_message(consumer, msg, log)
         return True

@@ -23,7 +23,7 @@ class FakeProducer:
 
 
 @pytest.mark.asyncio
-async def test_handle_summary_message(monkeypatch):
+async def test_persist_and_publish_summary(monkeypatch):
     # Stub llm to return deterministic text
     monkeypatch.setattr(summary_sidecar, "llm_summarize", lambda *args, **kwargs: "LLM SUMMARY")
     # Ensure semaphore allows the call
@@ -44,7 +44,7 @@ async def test_handle_summary_message(monkeypatch):
         "sentiment": 0.1,
     }
 
-    await summary_sidecar.handle_summary_message(json.dumps(payload).encode(), producer, pool, log)
+    await summary_sidecar.persist_and_publish_summary(json.dumps(payload).encode(), producer, pool, log)
 
     # DB upsert called
     assert len(pool.calls) == 1
@@ -65,7 +65,7 @@ async def test_handle_summary_message(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_handle_summary_message_llm_failure(monkeypatch):
+async def test_persist_and_publish_summary_llm_failure(monkeypatch):
     def failing_llm(*args, **kwargs):
         raise RuntimeError("fail")
 
@@ -87,11 +87,11 @@ async def test_handle_summary_message_llm_failure(monkeypatch):
     }
 
     with pytest.raises(RuntimeError):
-        await summary_sidecar.handle_summary_message(json.dumps(payload).encode(), producer, pool, log)
+        await summary_sidecar.persist_and_publish_summary(json.dumps(payload).encode(), producer, pool, log)
 
 
 @pytest.mark.asyncio
-async def test_handle_summary_message_batch(monkeypatch):
+async def test_persist_and_publish_summary_batch(monkeypatch):
     monkeypatch.setattr(summary_sidecar, "llm_summarize", lambda *args, **kwargs: "LLM SUMMARY")
     summary_sidecar._llm_semaphore = summary_sidecar.asyncio.Semaphore(2)
 
@@ -115,7 +115,7 @@ async def test_handle_summary_message_batch(monkeypatch):
     ]
 
     for p in payloads:
-        await summary_sidecar.handle_summary_message(json.dumps(p).encode(), producer, pool, log)
+        await summary_sidecar.persist_and_publish_summary(json.dumps(p).encode(), producer, pool, log)
 
     # Two upserts, two publishes
     assert len(pool.calls) == 2
@@ -157,7 +157,7 @@ async def test_process_summary_record_sends_dlq_on_failure(monkeypatch):
         kwargs.pop("max_attempts", None)
         return await fn(*args, **kwargs)
 
-    monkeypatch.setattr(summary_sidecar, "handle_summary_message", fail_handle)
+    monkeypatch.setattr(summary_sidecar, "persist_and_publish_summary", fail_handle)
     monkeypatch.setattr(summary_sidecar, "with_retries", no_retry)
 
     consumer = FakeConsumer()

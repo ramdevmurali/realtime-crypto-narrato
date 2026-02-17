@@ -101,8 +101,7 @@ async def check_anomalies(processor: ProcessorState, symbol: str, ts: datetime, 
             log=log,
             op="send_alert",
         )
-        processor.last_alert[(event.symbol, event.window)] = event.time
-        processor.alerts_emitted += 1
+        processor.record_alert(event.symbol, event.window, event.time)
         log.info(
             "alert_emitted",
             extra={

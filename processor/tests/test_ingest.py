@@ -44,6 +44,9 @@ class FakeProcessor:
         self.producer = FakeProducer()
         self.latest_headline = (None, None, None)
 
+    def record_latest_headline(self, title, sentiment, ts):
+        self.latest_headline = (title, sentiment, ts)
+
 
 def test_build_news_msg_dedupes():
     proc = FakeProcessor()

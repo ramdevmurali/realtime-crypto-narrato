@@ -1,14 +1,11 @@
 import asyncio
-from collections import defaultdict
 from datetime import datetime
-from typing import Dict, Tuple
 import contextlib
 
 from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
 
 from .config import settings
 from .io.db import init_tables
-from .domain.windows import PriceWindow
 from .services.ingest import price_ingest_task, news_ingest_task
 from .utils import with_retries
 from .logging_config import get_logger
@@ -16,22 +13,12 @@ from .services.runtime import log_startup_config
 from .services.health import healthcheck
 from .services.price_consumer import consume_prices
 from .runtime_interface import RuntimeService
+from .processor_state import ProcessorStateImpl
 
 
-class StreamProcessor(RuntimeService):
+class StreamProcessor(ProcessorStateImpl, RuntimeService):
     def __init__(self):
-        self.producer: AIOKafkaProducer | None = None
-        self.consumer: AIOKafkaConsumer | None = None
-        self.price_windows: Dict[str, PriceWindow] = defaultdict(PriceWindow)
-        self.last_alert: Dict[Tuple[str, str], datetime] = {}
-        self.latest_headline: Tuple[str | None, float | None, datetime | None] = (None, None, None)
-        self.bad_price_messages = 0
-        self.bad_price_log_every = settings.bad_price_log_every
-        self.last_price_ts: Dict[str, datetime] = {}
-        self.late_price_messages = 0
-        self.late_price_log_every = settings.late_price_log_every
-        self.alerts_emitted = 0
-        self.log = get_logger(__name__)
+        super().__init__(log=get_logger(__name__))
 
     async def start(self):
         self.log.info("processor_starting", extra={"component": "processor"})

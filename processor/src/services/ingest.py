@@ -65,7 +65,7 @@ async def publish_news_msg(processor: ProcessorState, msg: NewsMsg) -> None:
         log=getattr(processor, "log", None),
         op="insert_headline",
     )
-    processor.latest_headline = (msg.title, msg.sentiment, msg.time)
+    processor.record_latest_headline(msg.title, msg.sentiment, msg.time)
     await with_retries(
         processor.producer.send_and_wait,
         settings.news_topic,

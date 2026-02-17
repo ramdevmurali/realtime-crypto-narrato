@@ -21,6 +21,11 @@ class FakeProcessor:
         self.producer = FakeProducer()
         self.last_alert = {}
         self.latest_headline = (None, None, None)
+        self.alerts_emitted = 0
+
+    def record_alert(self, symbol, window, ts):
+        self.last_alert[(symbol, window)] = ts
+        self.alerts_emitted += 1
 
 
 @pytest.mark.asyncio

@@ -1,7 +1,4 @@
 import json
-from datetime import timedelta
-
-from ..config import settings
 from ..io.models.messages import PriceMsg
 from .price_pipeline import process_price, PipelineError
 from ..logging_config import get_logger
@@ -14,8 +11,7 @@ def handle_price_message(proc: ProcessorState, msg) -> tuple[str, dict]:
         data = json.loads(msg.value.decode())
         price_msg = PriceMsg.model_validate(data)
     except (json.JSONDecodeError, Exception):
-        proc.bad_price_messages += 1
-        if proc.bad_price_messages == 1 or proc.bad_price_messages % proc.bad_price_log_every == 0:
+        if proc.record_bad_price():
             log.warning(
                 "price_message_decode_failed",
                 extra={
@@ -28,23 +24,19 @@ def handle_price_message(proc: ProcessorState, msg) -> tuple[str, dict]:
     symbol = price_msg.symbol
     price = float(price_msg.price)
     ts = price_msg.time
-    last_ts = proc.last_price_ts.get(symbol)
-    tolerance = timedelta(seconds=settings.late_price_tolerance_sec)
-    if last_ts and ts < last_ts - tolerance:
-        proc.late_price_messages += 1
+    if proc.should_drop_late(symbol, ts):
+        last_ts = proc.last_price_ts.get(symbol)
         if proc.late_price_messages == 1 or proc.late_price_messages % proc.late_price_log_every == 0:
             log.warning(
                 "price_message_late",
                 extra={
                     "symbol": symbol,
                     "time": ts.isoformat(),
-                    "last_seen": last_ts.isoformat(),
+                    "last_seen": last_ts.isoformat() if last_ts else None,
                     "late_price_messages": proc.late_price_messages,
                 },
             )
         return "commit", {}
-    if last_ts is None or ts > last_ts:
-        proc.last_price_ts[symbol] = ts
 
     return "process", {"symbol": symbol, "price": price, "ts": ts, "raw": msg.value}
 

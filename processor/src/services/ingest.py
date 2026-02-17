@@ -117,6 +117,11 @@ async def price_ingest_task(processor: ProcessorState):
             failures += 1
             if failures % settings.price_failure_log_every == 0:
                 log.warning("price_failure_count", extra={"failures": failures})
+            if failures % settings.ingest_stuck_log_every == 0:
+                log.warning(
+                    "ingest_stuck",
+                    extra={"component": "price", "failures": failures, "attempt": attempt},
+                )
 
 
 async def news_ingest_task(processor: ProcessorState):
@@ -160,5 +165,10 @@ async def news_ingest_task(processor: ProcessorState):
             failures += 1
             if failures % settings.news_failure_log_every == 0:
                 log.warning("news_failure_count", extra={"failures": failures})
+            if failures % settings.ingest_stuck_log_every == 0:
+                log.warning(
+                    "ingest_stuck",
+                    extra={"component": "news", "failures": failures, "attempt": attempt},
+                )
             continue
         await asyncio.sleep(settings.news_poll_interval_sec)

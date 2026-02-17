@@ -53,6 +53,7 @@ class Settings(BaseSettings):
     news_publish_log_every: int = 200
     price_failure_log_every: int = 5
     news_failure_log_every: int = 3
+    ingest_stuck_log_every: int = 100
     price_backoff_failures_threshold: int = 5
     price_backoff_base_sec: float = 1.0
     price_backoff_base_after_failures_sec: float = 2.0
@@ -152,6 +153,7 @@ class Settings(BaseSettings):
         "news_publish_log_every",
         "price_failure_log_every",
         "news_failure_log_every",
+        "ingest_stuck_log_every",
         "price_backoff_failures_threshold",
         "price_backoff_base_sec",
         "price_backoff_base_after_failures_sec",

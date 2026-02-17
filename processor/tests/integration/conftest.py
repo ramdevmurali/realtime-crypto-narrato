@@ -21,30 +21,38 @@ def _compose_file() -> Path:
 
 async def _wait_for_db(dsn: str, timeout_sec: int = 60):
     deadline = time.monotonic() + timeout_sec
+    last_exc: Exception | None = None
     while time.monotonic() < deadline:
         try:
             conn = await asyncpg.connect(dsn=dsn)
             await conn.execute("SELECT 1;")
             await conn.close()
             return
-        except Exception:
+        except Exception as exc:
+            last_exc = exc
             await asyncio.sleep(1)
+    if last_exc is not None:
+        print(f"timescaledb not ready, last error: {last_exc!r}")
     raise RuntimeError("timescaledb not ready")
 
 
 async def _wait_for_kafka(brokers: str, timeout_sec: int = 60):
     deadline = time.monotonic() + timeout_sec
+    last_exc: Exception | None = None
     while time.monotonic() < deadline:
         producer = AIOKafkaProducer(bootstrap_servers=brokers)
         try:
             await producer.start()
             await producer.stop()
             return
-        except Exception:
+        except Exception as exc:
+            last_exc = exc
             await asyncio.sleep(1)
         finally:
             with contextlib.suppress(Exception):
                 await producer.stop()
+    if last_exc is not None:
+        print(f"redpanda not ready, last error: {last_exc!r}")
     raise RuntimeError("redpanda not ready")
 
 

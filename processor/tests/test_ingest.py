@@ -181,6 +181,25 @@ def test_build_news_msg_retry_after_failure():
     assert msg is not None
 
 
+def test_build_news_msg_missing_uid_does_not_dedupe_all():
+    seen_cache = {}
+    seen_order = deque()
+    pending = set()
+    entry = {
+        "published": "2026-01-27T12:00:00Z",
+        "source": {"title": "rss"},
+    }
+    seen_now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+
+    published, msg, uid = ingest.build_news_msg(entry, seen_cache, seen_order, pending, seen_now)
+    assert published is False
+    assert msg is None
+    assert uid is None
+    assert pending == set()
+    assert seen_cache == {}
+    assert len(seen_order) == 0
+
+
 @pytest.mark.asyncio
 async def test_price_ingest_task_publishes_once(monkeypatch):
     fake_msg = json.dumps({

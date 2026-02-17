@@ -37,6 +37,10 @@ def build_news_msg(
     seen_now,
 ) -> tuple[bool, NewsMsg | None, str | None]:
     uid = entry.get('id') or entry.get('link') or entry.get('title')
+    if uid is None:
+        log = get_logger(__name__)
+        log.warning("news_entry_missing_uid", extra={"published": entry.get("published"), "source": entry.get("source")})
+        return False, None, None
     if uid in seen_cache or uid in pending:
         return False, None, None
     pending.add(uid)

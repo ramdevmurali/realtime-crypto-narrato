@@ -1,8 +1,10 @@
 import json
 import pytest
+from datetime import datetime
 
 from processor.src import app as app_module
 from processor.src.services import price_pipeline as pipeline_module
+from processor.src.services import price_consumer as consumer_module
 
 
 class FakeConsumer:
@@ -56,6 +58,33 @@ class FakeMsg:
 
     def __init__(self, payload):
         self.value = payload
+
+
+def test_handle_price_message_invalid_json(monkeypatch):
+    proc = app_module.StreamProcessor()
+    msg = FakeMsg(b"not-json")
+    action, data = consumer_module.handle_price_message(proc, msg)
+    assert action == "dlq"
+    assert data["payload"] == b"not-json"
+
+
+def test_handle_price_message_late_message(monkeypatch):
+    proc = app_module.StreamProcessor()
+    ts = "2026-01-27T12:00:00Z"
+    proc.last_price_ts["btcusdt"] = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    late_payload = json.dumps({"symbol": "btcusdt", "price": 100.0, "time": "2026-01-27T11:59:59Z"}).encode()
+    msg = FakeMsg(late_payload)
+    action, _ = consumer_module.handle_price_message(proc, msg)
+    assert action == "commit"
+
+
+def test_handle_price_message_valid(monkeypatch):
+    proc = app_module.StreamProcessor()
+    payload = json.dumps({"symbol": "btcusdt", "price": 100.0, "time": "2026-01-27T12:00:00Z"}).encode()
+    msg = FakeMsg(payload)
+    action, data = consumer_module.handle_price_message(proc, msg)
+    assert action == "process"
+    assert data["symbol"] == "btcusdt"
 
 
 @pytest.mark.asyncio

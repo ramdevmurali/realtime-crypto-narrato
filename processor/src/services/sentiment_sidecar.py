@@ -12,7 +12,7 @@ from ..runtime_interface import RuntimeService
 from ..io.db import init_pool
 from ..utils import simple_sentiment, with_retries, now_utc
 from ..io.models.messages import NewsMsg, EnrichedNewsMsg
-from ..metrics import MetricsRegistry
+from ..metrics import MetricsRegistry, get_metrics
 from . import sentiment_model
 from .sidecar_runtime import SidecarRuntime
 
@@ -26,7 +26,7 @@ async def _commit_message(consumer, msg, log):
         log.warning("news_commit_failed", extra={"error": str(exc), "offset": msg.offset})
 
 
-async def _send_dlq(producer, payload: bytes, log):
+async def _send_dlq(producer, payload: bytes, log, offset: int | None = None) -> bool:
     try:
         await with_retries(
             producer.send_and_wait,
@@ -35,8 +35,12 @@ async def _send_dlq(producer, payload: bytes, log):
             log=log,
             op="send_news_dlq",
         )
+        return True
     except Exception as exc:
-        log.error("news_dlq_failed", extra={"error": str(exc)})
+        metrics = get_metrics()
+        metrics.inc("sentiment_dlq_failed")
+        log.error("news_dlq_failed", extra={"error": str(exc), "offset": offset})
+        return False
 
 
 async def _upsert_headline(pool, payload: NewsMsg, sentiment: float):
@@ -68,8 +72,9 @@ async def infer_sentiment_batch(messages: Iterable, consumer, producer, log, met
             log.warning("news_message_decode_failed", extra={"error": str(exc)})
             metrics.inc("sentiment_errors")
             metrics.inc("sentiment_dlq")
-            await _send_dlq(producer, msg.value, log)
-            await _commit_message(consumer, msg, log)
+            dlq_ok = await _send_dlq(producer, msg.value, log, offset=msg.offset)
+            if dlq_ok:
+                await _commit_message(consumer, msg, log)
             continue
         parsed.append((msg, payload))
 
@@ -173,8 +178,9 @@ async def persist_and_publish_sentiment_batch(parsed, results, producer, pool, c
             log.warning("sentiment_handle_failed", extra={"error": str(exc)})
             metrics.inc("sentiment_errors")
             metrics.inc("sentiment_dlq")
-            await _send_dlq(producer, msg.value, log)
-            await _commit_message(consumer, msg, log)
+            dlq_ok = await _send_dlq(producer, msg.value, log, offset=msg.offset)
+            if dlq_ok:
+                await _commit_message(consumer, msg, log)
 
 
 class SentimentSidecar(SidecarRuntime, RuntimeService):

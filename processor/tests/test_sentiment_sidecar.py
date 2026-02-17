@@ -6,6 +6,7 @@ from processor.src.config import settings
 from processor.src.io.models.messages import NewsMsg
 from processor.src.services import sentiment_sidecar
 from processor.src.utils import simple_sentiment
+from processor.src.metrics import get_metrics
 
 
 class FakePool:
@@ -165,3 +166,46 @@ async def test_sentiment_sidecar_dlq_on_failure(monkeypatch):
     topic, _ = producer.sent[0]
     assert topic == settings.news_dlq_topic
     assert len(consumer.commits) == 1
+
+
+@pytest.mark.asyncio
+async def test_sentiment_dlq_failure_does_not_commit(monkeypatch):
+    pool = FakePool()
+    producer = FakeProducer()
+    consumer = FakeConsumer()
+
+    def fake_predict(texts):
+        return ([(0.1, "neutral", 0.7) for _ in texts], False)
+
+    async def fail_upsert(*args, **kwargs):
+        raise RuntimeError("db fail")
+
+    async def fail_send(*args, **kwargs):
+        raise RuntimeError("dlq fail")
+
+    async def no_retry(fn, *args, **kwargs):
+        kwargs.pop("log", None)
+        kwargs.pop("op", None)
+        kwargs.pop("max_attempts", None)
+        return await fn(*args, **kwargs)
+
+    monkeypatch.setattr(sentiment_sidecar.sentiment_model, "predict", fake_predict)
+    monkeypatch.setattr(sentiment_sidecar, "_upsert_headline", fail_upsert)
+    monkeypatch.setattr(sentiment_sidecar, "with_retries", no_retry)
+    monkeypatch.setattr(producer, "send_and_wait", fail_send)
+
+    metrics = get_metrics()
+    before = metrics.snapshot()["counters"].get("sentiment_dlq_failed", 0)
+
+    msg = NewsMsg(
+        time=datetime(2026, 2, 1, 0, 0, tzinfo=timezone.utc),
+        title="headline",
+        url=None,
+        source="rss",
+        sentiment=0.0,
+    )
+    await _run_sentiment_flow([FakeMsg(msg.to_bytes())], consumer, producer, pool)
+
+    after = metrics.snapshot()["counters"].get("sentiment_dlq_failed", 0)
+    assert after == before + 1
+    assert len(consumer.commits) == 0

@@ -41,11 +41,12 @@ Note: legacy folders like `processor/src/models` and `processor/src/processor/se
 - `metrics(time, symbol, return_1m/5m/15m, vol_1m/5m/15m, return_z_1m/5m/15m, return_z_ewma_1m/5m/15m, vol_z_1m/5m/15m, vol_spike_1m/5m/15m, p05_return_1m/5m/15m, p95_return_1m/5m/15m, attention)`
 - `headlines(time, title, source, url, sentiment)`
 - `anomalies(time, symbol, window_name, direction, return_value, threshold, headline, sentiment, summary)`
+  - Note: the `anomalies` table stores persisted alert records.
 
 Terminology note: the `metrics` table stores **price metrics** (returns/vol/z/percentiles). This is distinct from **runtime telemetry metrics** (counters/rolling stats) exposed via `/metrics`.
 
 ## Alert path and summaries
-- Threshold check & cooldown happen in `domain/anomaly.py`; if tripped, the alert is persisted to Timescale and published to the `alerts` topic.
+- Threshold check & cooldown happen in `domain/anomaly.py`; if tripped, the alert is persisted to Timescale (in `anomalies`) and published to the Kafka `alerts` topic. These represent the same event across DB and Kafka.
 - The processor no longer calls the LLM in the hot path. It publishes a summary-request message to the `summaries` topic with `{time, symbol, window, direction, ret, threshold, headline, sentiment}`. Alerts still carry the base/stub summary.
 - The summary sidecar consumes `summaries`, calls the configured LLM, and backfills richer summaries asynchronously.
   - Sidecar knobs: `SUMMARY_CONSUMER_GROUP`, `SUMMARY_POLL_TIMEOUT_MS`, `SUMMARY_BATCH_MAX` (optional) control consumption behavior.

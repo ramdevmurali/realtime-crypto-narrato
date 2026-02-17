@@ -42,6 +42,8 @@ Note: legacy folders like `processor/src/models` and `processor/src/processor/se
 - `headlines(time, title, source, url, sentiment)`
 - `anomalies(time, symbol, window_name, direction, return_value, threshold, headline, sentiment, summary)`
 
+Terminology note: the `metrics` table stores **price metrics** (returns/vol/z/percentiles). This is distinct from **runtime telemetry metrics** (counters/rolling stats) exposed via `/metrics`.
+
 ## Alert path and summaries
 - Threshold check & cooldown happen in `domain/anomaly.py`; if tripped, the alert is persisted to Timescale and published to the `alerts` topic.
 - The processor no longer calls the LLM in the hot path. It publishes a summary-request message to the `summaries` topic with `{time, symbol, window, direction, ret, threshold, headline, sentiment}`. Alerts still carry the base/stub summary.
@@ -149,6 +151,7 @@ curl -N 'http://localhost:8000/headlines/stream?limit=5&interval=2'
   `SENTIMENT_METRICS_HOST:SENTIMENT_METRICS_PORT` and includes rolling stats for
   inference and queue lag plus counters (`sentiment_batches`, `sentiment_fallbacks`,
   `sentiment_dlq`, `sentiment_errors`).
+  These are **telemetry metrics** (operational counters), not the price metrics stored in the `metrics` table.
 - Light runtime: set `SENTIMENT_LIGHT_RUNTIME=true` to use `tokenizers` directly
   and avoid importing `transformers` (useful for slimmer images).
   For Docker builds, set `SENTIMENT_LIGHT_RUNTIME=true` so the image installs

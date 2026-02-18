@@ -6,6 +6,7 @@ from datetime import datetime, timezone, timedelta
 import pytest
 
 from processor.src.services import ingest
+from processor.src.services import sentiment_sidecar
 from processor.src.config import settings
 
 
@@ -198,6 +199,99 @@ def test_build_news_msg_missing_uid_does_not_dedupe_all():
     assert pending == set()
     assert seen_cache == {}
     assert len(seen_order) == 0
+
+
+@pytest.mark.asyncio
+async def test_ingest_to_sentiment_flow(monkeypatch):
+    class _Pool:
+        def __init__(self):
+            self.calls = []
+
+        async def execute(self, sql, *params):
+            self.calls.append((sql.strip(), params))
+
+    class _Producer:
+        def __init__(self):
+            self.sent = []
+
+        async def send_and_wait(self, topic, payload):
+            self.sent.append((topic, payload))
+
+    class _Consumer:
+        def __init__(self):
+            self.commits = []
+
+        async def commit(self, offsets):
+            self.commits.append(offsets)
+
+    class _Msg:
+        topic = "news"
+        partition = 0
+        offset = 1
+
+        def __init__(self, payload):
+            self.value = payload
+
+    def _expected_event_id(payload):
+        title_norm = (payload.title or "").strip().lower()
+        source_norm = (payload.source or "unknown").strip().lower()
+        url_norm = (payload.url or "").strip()
+        canonical = f"{payload.time}|{source_norm}|{title_norm}|{url_norm}"
+        digest = sentiment_sidecar.hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:12]
+        return f"news:{source_norm}:{digest}"
+
+    def fake_predict(texts):
+        return ([(0.7, "positive", 0.9) for _ in texts], False)
+
+    monkeypatch.setattr(sentiment_sidecar.sentiment_model, "predict", fake_predict)
+
+    seen_cache = {}
+    seen_order = deque()
+    pending = set()
+    entry = {
+        "id": "abc",
+        "title": "Breaking",
+        "link": "http://example.com",
+        "published": "2026-01-27T12:00:00Z",
+        "source": {"title": "rss"},
+    }
+    seen_now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+    published, msg, _ = ingest.build_news_msg(entry, seen_cache, seen_order, pending, seen_now)
+    assert published is True
+    assert msg is not None
+
+    pool = _Pool()
+    producer = _Producer()
+    consumer = _Consumer()
+    metrics = sentiment_sidecar.MetricsRegistry(service_name="sentiment_sidecar")
+
+    parsed, results, _fallback_used, *_ = await sentiment_sidecar.infer_sentiment_batch(
+        [_Msg(msg.to_bytes())],
+        consumer,
+        producer,
+        sentiment_sidecar.log,
+        metrics,
+    )
+    await sentiment_sidecar.persist_and_publish_sentiment_batch(
+        parsed,
+        results,
+        producer,
+        pool,
+        consumer,
+        sentiment_sidecar.log,
+        metrics,
+    )
+
+    assert len(pool.calls) == 1
+    sql, params = pool.calls[0]
+    assert "INSERT INTO headlines" in sql
+    assert params[4] == 0.7
+
+    assert len(producer.sent) == 1
+    topic, payload = producer.sent[0]
+    assert topic == settings.news_enriched_topic
+    out = json.loads(payload.decode())
+    assert out["event_id"] == _expected_event_id(msg)
 
 
 @pytest.mark.asyncio

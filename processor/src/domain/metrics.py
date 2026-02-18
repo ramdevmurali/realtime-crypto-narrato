@@ -1,7 +1,10 @@
 from datetime import timedelta
 from ..config import settings, get_thresholds, get_windows
+from ..logging_config import get_logger
 from typing import List
 import math
+
+log = get_logger(__name__)
 
 
 def _returns_for_window(win, ts, window: timedelta) -> List[float]:
@@ -88,11 +91,17 @@ def compute_metrics(price_windows, symbol: str, ts):
 
     ratios = []
     thr = get_thresholds()
+    missing = []
     for label in windows.keys():
         r = metrics.get(f"return_{label}")
         threshold = thr.get(label)
-        if r is not None and threshold and threshold > 0:
+        if not threshold:
+            missing.append(label)
+            continue
+        if r is not None and threshold > 0:
             ratios.append(abs(r) / threshold)
+    if missing:
+        log.warning("missing_threshold_for_window", extra={"labels": missing})
     metrics["attention"] = max(ratios) if ratios else None
 
     if all(metrics.get(f"return_{lbl}") is None for lbl in windows.keys()):

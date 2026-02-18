@@ -111,7 +111,7 @@ def integration_settings():
     settings.news_dlq_topic = f"news-dlq-it-{suffix}"
     settings.summary_consumer_group = f"summary-it-{suffix}"
     settings.sentiment_sidecar_group = f"sentiment-it-{suffix}"
-    settings.retry_max_attempts = 2
+    settings.retry_max_attempts = 4
     settings.retry_backoff_base_sec = 0.1
     settings.retry_backoff_cap_sec = 1.0
     settings.late_price_tolerance_sec = 0

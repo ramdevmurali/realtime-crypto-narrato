@@ -72,13 +72,22 @@ class StreamProcessor(ProcessorStateImpl, RuntimeService):
         except Exception as exc:
             self.log.warning("price_commit_failed", extra={"error": str(exc), "offset": msg.offset})
 
-    async def send_price_dlq(self, payload: bytes):
+    async def send_price_dlq(self, payload: bytes) -> bool:
         if not self.producer:
-            return
+            self.log.warning("price_dlq_unavailable")
+            from .metrics import get_metrics
+
+            get_metrics().inc("price_dlq_failed")
+            return False
         try:
             await self.producer.send_and_wait(settings.price_dlq_topic, payload)
+            return True
         except Exception as exc:
+            from .metrics import get_metrics
+
+            get_metrics().inc("price_dlq_failed")
             self.log.warning(
                 "price_dlq_failed",
                 extra={"error": str(exc), "payload_bytes": len(payload) if payload else 0},
             )
+            return False

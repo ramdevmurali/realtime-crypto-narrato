@@ -179,3 +179,42 @@ async def test_process_prices_task_drops_late_message(monkeypatch):
 
     assert calls["insert_price"] == 1
     assert len(proc.consumer.commits) == 2
+
+
+@pytest.mark.asyncio
+async def test_process_prices_task_skips_commit_on_dlq_failure(monkeypatch):
+    proc = app_module.StreamProcessor()
+    msg = FakeMsg(b"not-json")
+    proc.consumer = FakeConsumer(msg)
+
+    async def fake_send_dlq(_payload):
+        return False
+
+    async def fail_commit(_msg):
+        raise AssertionError("commit should not be called when DLQ send fails")
+
+    monkeypatch.setattr(proc, "send_price_dlq", fake_send_dlq)
+    monkeypatch.setattr(proc, "commit_msg", fail_commit)
+
+    await proc.process_prices_task()
+
+
+@pytest.mark.asyncio
+async def test_process_prices_task_commits_on_dlq_success(monkeypatch):
+    proc = app_module.StreamProcessor()
+    msg = FakeMsg(b"not-json")
+    proc.consumer = FakeConsumer(msg)
+    calls = {"commit": 0}
+
+    async def fake_send_dlq(_payload):
+        return True
+
+    async def record_commit(_msg):
+        calls["commit"] += 1
+
+    monkeypatch.setattr(proc, "send_price_dlq", fake_send_dlq)
+    monkeypatch.setattr(proc, "commit_msg", record_commit)
+
+    await proc.process_prices_task()
+
+    assert calls["commit"] == 1

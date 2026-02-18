@@ -47,8 +47,12 @@ async def consume_prices(proc: ProcessorState) -> None:
     async for msg in proc.consumer:
         action, data = handle_price_message(proc, msg)
         if action == "dlq":
-            await proc.send_price_dlq(data["payload"])
-            await proc.commit_msg(msg)
+            ok = await proc.send_price_dlq(data["payload"])
+            if ok:
+                await proc.commit_msg(msg)
+            else:
+                log = getattr(proc, "log", get_logger(__name__))
+                log.warning("price_dlq_commit_skipped", extra={"offset": msg.offset})
             continue
         if action == "commit":
             await proc.commit_msg(msg)
@@ -57,14 +61,21 @@ async def consume_prices(proc: ProcessorState) -> None:
         try:
             await process_price(proc, data["symbol"], data["price"], data["ts"])
         except PipelineError:
-            await proc.send_price_dlq(data["raw"])
-            await proc.commit_msg(msg)
+            ok = await proc.send_price_dlq(data["raw"])
+            if ok:
+                await proc.commit_msg(msg)
+            else:
+                log = getattr(proc, "log", get_logger(__name__))
+                log.warning("price_dlq_commit_skipped", extra={"offset": msg.offset})
             continue
         except Exception as exc:
             log = getattr(proc, "log", get_logger(__name__))
             log.error("price_pipeline_failed", extra={"error": str(exc), "symbol": data["symbol"]})
-            await proc.send_price_dlq(data["raw"])
-            await proc.commit_msg(msg)
+            ok = await proc.send_price_dlq(data["raw"])
+            if ok:
+                await proc.commit_msg(msg)
+            else:
+                log.warning("price_dlq_commit_skipped", extra={"offset": msg.offset})
             continue
 
         await proc.commit_msg(msg)

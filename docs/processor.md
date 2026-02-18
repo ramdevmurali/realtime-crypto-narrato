@@ -178,6 +178,7 @@ If a value is unset/empty, no retention policy is applied for that table.
 - Summary DLQ buffer: `SUMMARY_DLQ_BUFFER_PATH`, `SUMMARY_DLQ_BUFFER_MAX_BYTES` (JSONL append-only).
 - LLM generation: `LLM_MAX_TOKENS`, `LLM_TEMPERATURE`.
 - LLM fallback logging: `LLM_FALLBACK_LOG_EVERY` and counter `llm_fallbacks`.
+- LLM fallback metrics (namespaced): `llm.llm_fallbacks`.
 - Anomaly hot path summary: `ANOMALY_HOTPATH_STUB_SUMMARY` (default true for low latency).
 - RSS dedupe: `RSS_SEEN_TTL_SEC`, `RSS_SEEN_MAX`.
 - RSS defaults: `RSS_DEFAULT_TITLE`, `RSS_DEFAULT_SOURCE`.

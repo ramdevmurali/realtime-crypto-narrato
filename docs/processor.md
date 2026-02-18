@@ -150,6 +150,7 @@ curl -N 'http://localhost:8000/headlines/stream?limit=5&interval=2'
 - Metrics tuning: `EWMA_Z_CAP`, `PERCENTILE_MIN_SAMPLES`.
 - Alert logging: `ALERT_LOG_EVERY`.
 - Summary sidecar: `SUMMARY_LLM_CONCURRENCY`.
+- Sidecar restart policy: `SIDECAR_RESTART_BACKOFF_SEC`, `SIDECAR_RESTART_MAX_PER_MIN`.
 - Task restart policy: `TASK_RESTART_BACKOFF_SEC`, `TASK_RESTART_MAX_PER_MIN`.
 - Summary DLQ buffer: `SUMMARY_DLQ_BUFFER_PATH`, `SUMMARY_DLQ_BUFFER_MAX_BYTES` (JSONL append-only).
 - LLM generation: `LLM_MAX_TOKENS`, `LLM_TEMPERATURE`.
@@ -162,6 +163,7 @@ curl -N 'http://localhost:8000/headlines/stream?limit=5&interval=2'
   `SENTIMENT_FALLBACK_LOG_EVERY`, `SENTIMENT_LIGHT_RUNTIME`, `SENTIMENT_METRICS_HOST`, `SENTIMENT_METRICS_PORT`,
   `SENTIMENT_POS_THRESHOLD`, `SENTIMENT_NEG_THRESHOLD`, `SENTIMENT_MAX_SEQ_LEN`,
   `SENTIMENT_SIDECAR_GROUP`, `NEWS_ENRICHED_TOPIC`, `NEWS_DLQ_TOPIC`.
+- Summary metrics: `SUMMARY_METRICS_HOST`, `SUMMARY_METRICS_PORT` (optional; enable `/metrics`).
 - Sentiment perf logs: `sentiment_infer_ms`, `batch_size`, `queue_lag_ms`, `fallback_used`.
   If `SENTIMENT_MAX_LATENCY_MS` is set, slow batches log `sentiment_batch_slow`.
   Fallback warnings are rate-limited by `SENTIMENT_FALLBACK_LOG_EVERY`.
@@ -171,6 +173,9 @@ curl -N 'http://localhost:8000/headlines/stream?limit=5&interval=2'
   `SENTIMENT_METRICS_HOST:SENTIMENT_METRICS_PORT` and includes rolling stats for
   inference and queue lag plus counters (`sentiment_batches`, `sentiment_fallbacks`,
   `sentiment_dlq`, `sentiment_errors`).
+  Summary sidecar exposes `/metrics` on `SUMMARY_METRICS_HOST:SUMMARY_METRICS_PORT`
+  and includes counters (`summary_batches`, `summary_success`, `summary_failures`,
+  `summary_dlq`, `summary_publish_skipped`) plus rolling `summary_latency_ms`.
   These are **telemetry metrics** (operational counters), not the price metrics stored in the `metrics` table.
 - Ingest telemetry counters: `price_ingest_failures`, `price_ingest_retries`,
   `news_ingest_failures`, `news_ingest_retries`.

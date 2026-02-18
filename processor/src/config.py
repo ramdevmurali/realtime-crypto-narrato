@@ -113,9 +113,13 @@ class Settings(BaseSettings):
     summary_poll_timeout_ms: int = 500
     summary_batch_max: int | None = None
     summary_llm_concurrency: int = 2
+    summary_metrics_host: str = "0.0.0.0"
+    summary_metrics_port: int | None = None
     sentiment_poll_timeout_ms: int = 500
     task_restart_backoff_sec: float = 2.0
     task_restart_max_per_min: int = 10
+    sidecar_restart_backoff_sec: float = 2.0
+    sidecar_restart_max_per_min: int = 10
 
     sentiment_provider: str = "stub"  # stub|onnx
     sentiment_model_path: str | None = None
@@ -174,6 +178,8 @@ class Settings(BaseSettings):
         "sentiment_poll_timeout_ms",
         "task_restart_backoff_sec",
         "task_restart_max_per_min",
+        "sidecar_restart_backoff_sec",
+        "sidecar_restart_max_per_min",
         "summary_dlq_buffer_max_bytes",
         "retry_max_attempts",
         "retry_backoff_base_sec",
@@ -232,6 +238,15 @@ class Settings(BaseSettings):
     @field_validator("sentiment_metrics_port")
     @classmethod
     def _positive_optional_metrics(cls, v):
+        if v is None:
+            return v
+        if v <= 0:
+            raise ValueError("must be positive")
+        return v
+
+    @field_validator("summary_metrics_port")
+    @classmethod
+    def _positive_optional_summary_metrics(cls, v):
         if v is None:
             return v
         if v <= 0:

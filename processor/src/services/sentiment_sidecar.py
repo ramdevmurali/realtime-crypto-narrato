@@ -283,30 +283,9 @@ class SentimentSidecar(SidecarRuntime, RuntimeService):
         await self._consumer.start()
 
         try:
-            while not self.should_stop():
-                msg_batch = await self._consumer.getmany(
-                    timeout_ms=settings.sentiment_poll_timeout_ms,
-                    max_records=settings.sentiment_batch_size,
-                )
-                messages = [msg for batch in msg_batch.values() for msg in batch]
-                if messages:
-                    parsed, results, _fallback, _infer_ms, _queue_lag_ms = await infer_sentiment_batch(
-                        messages,
-                        self._consumer,
-                        self._producer,
-                        self.log,
-                        self.metrics,
-                    )
-                    await persist_and_publish_sentiment_batch(
-                        parsed,
-                        results,
-                        self._producer,
-                        self._pool,
-                        self._consumer,
-                        self.log,
-                        self.metrics,
-                    )
-                await asyncio.sleep(0)  # yield
+            await self._run_task_supervisor(
+                {"sentiment_loop": lambda: asyncio.create_task(self._run_loop())}
+            )
         finally:
             await self._shutdown()
 
@@ -316,6 +295,32 @@ class SentimentSidecar(SidecarRuntime, RuntimeService):
             await self._metrics_server.wait_closed()
             self._metrics_server = None
         await super()._shutdown()
+
+    async def _run_loop(self) -> None:
+        while not self.should_stop():
+            msg_batch = await self._consumer.getmany(
+                timeout_ms=settings.sentiment_poll_timeout_ms,
+                max_records=settings.sentiment_batch_size,
+            )
+            messages = [msg for batch in msg_batch.values() for msg in batch]
+            if messages:
+                parsed, results, _fallback, _infer_ms, _queue_lag_ms = await infer_sentiment_batch(
+                    messages,
+                    self._consumer,
+                    self._producer,
+                    self.log,
+                    self.metrics,
+                )
+                await persist_and_publish_sentiment_batch(
+                    parsed,
+                    results,
+                    self._producer,
+                    self._pool,
+                    self._consumer,
+                    self.log,
+                    self.metrics,
+                )
+            await asyncio.sleep(0)  # yield
 
 
 async def main():

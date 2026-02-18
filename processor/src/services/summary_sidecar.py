@@ -84,7 +84,7 @@ class SummarySidecar(SidecarRuntime, RuntimeService):
                 body = json.dumps({"error": "not found"}).encode()
                 status = "404 Not Found"
             else:
-                body = json.dumps(get_metrics().snapshot()).encode()
+                body = json.dumps(get_metrics("summary").snapshot()).encode()
                 status = "200 OK"
             headers = [
                 f"HTTP/1.1 {status}",
@@ -107,7 +107,7 @@ class SummarySidecar(SidecarRuntime, RuntimeService):
                 max_records=settings.summary_batch_max,
             )
             if msg_batch:
-                get_metrics().inc("summary_batches")
+                get_metrics("summary").inc("summary_batches")
             for tp, messages in msg_batch.items():
                 for msg in messages:
                     await process_summary_record(
@@ -241,7 +241,7 @@ async def _commit_message(consumer, msg, log):
 
 
 async def process_summary_record(msg, consumer, producer, pool, log, semaphore: asyncio.Semaphore):
-    metrics = get_metrics()
+    metrics = get_metrics("summary")
     started = time.perf_counter()
     try:
         payload = SummaryRequestMsg.model_validate_json(msg.value).model_dump()

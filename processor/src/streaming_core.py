@@ -187,7 +187,7 @@ class StreamProcessor(ProcessorStateImpl, RuntimeService):
             self.log.warning("price_dlq_unavailable")
             from .metrics import get_metrics
 
-            get_metrics().inc("price_dlq_failed")
+            get_metrics("processor").inc("price_dlq_failed")
             return False
         try:
             await self.producer.send_and_wait(settings.price_dlq_topic, payload)
@@ -195,7 +195,7 @@ class StreamProcessor(ProcessorStateImpl, RuntimeService):
         except Exception as exc:
             from .metrics import get_metrics
 
-            get_metrics().inc("price_dlq_failed")
+            get_metrics("processor").inc("price_dlq_failed")
             self.log.warning(
                 "price_dlq_failed",
                 extra={"error": str(exc), "payload_bytes": len(payload) if payload else 0},

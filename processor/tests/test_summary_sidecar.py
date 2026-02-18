@@ -4,7 +4,7 @@ import base64
 import pytest
 
 from processor.src.services import summary_sidecar  # type: ignore
-from processor.src.metrics import MetricsRegistry
+from processor.src.metrics import MetricsRegistry, NamespacedMetricsRegistry
 from processor.src.config import settings  # type: ignore
 
 
@@ -233,8 +233,9 @@ async def test_summary_skips_publish_when_already_published(monkeypatch):
 
     monkeypatch.setattr(summary_sidecar, "publish_summary_alert", fail_publish)
 
-    metrics = MetricsRegistry()
-    monkeypatch.setattr(summary_sidecar, "get_metrics", lambda: metrics)
+    base_metrics = MetricsRegistry()
+    metrics = NamespacedMetricsRegistry(base_metrics, "summary")
+    monkeypatch.setattr(summary_sidecar, "get_metrics", lambda *args, **kwargs: metrics)
 
     ok, consumer, producer, pool = await _run_summary_record(
         payload,
@@ -245,7 +246,7 @@ async def test_summary_skips_publish_when_already_published(monkeypatch):
     assert ok is True
     assert len(producer.sent) == 0
     assert len(pool.calls) == 1
-    assert metrics.snapshot()["counters"].get("summary_publish_skipped") == 1
+    assert metrics.snapshot()["counters"].get("summary.summary_publish_skipped") == 1
 
 
 @pytest.mark.asyncio
@@ -321,9 +322,10 @@ async def test_summary_dlq_failure_increments_metric(monkeypatch, tmp_path):
     monkeypatch.setattr(settings, "summary_dlq_buffer_path", str(buffer_path))
     monkeypatch.setattr(settings, "summary_dlq_buffer_max_bytes", 1024)
 
-    metrics = MetricsRegistry()
-    monkeypatch.setattr(summary_sidecar, "get_metrics", lambda: metrics)
-    before = metrics.snapshot()["counters"].get("summary_dlq_failed", 0)
+    base_metrics = MetricsRegistry()
+    metrics = NamespacedMetricsRegistry(base_metrics, "summary")
+    monkeypatch.setattr(summary_sidecar, "get_metrics", lambda *args, **kwargs: metrics)
+    before = metrics.snapshot()["counters"].get("summary.summary_dlq_failed", 0)
     ok, consumer, producer, pool = await _run_summary_record(
         payload,
         monkeypatch,
@@ -331,7 +333,7 @@ async def test_summary_dlq_failure_increments_metric(monkeypatch, tmp_path):
         producer=FailingProducer(),
     )
     assert ok is False
-    after = metrics.snapshot()["counters"].get("summary_dlq_failed", 0)
+    after = metrics.snapshot()["counters"].get("summary.summary_dlq_failed", 0)
     assert after == before + 1
 
 
@@ -348,14 +350,15 @@ async def test_summary_metrics_increment_on_success(monkeypatch):
         "sentiment": 0.1,
     }
 
-    metrics = MetricsRegistry()
-    monkeypatch.setattr(summary_sidecar, "get_metrics", lambda: metrics)
+    base_metrics = MetricsRegistry()
+    metrics = NamespacedMetricsRegistry(base_metrics, "summary")
+    monkeypatch.setattr(summary_sidecar, "get_metrics", lambda *args, **kwargs: metrics)
 
     ok, _, _, _ = await _run_summary_record(payload, monkeypatch)
     assert ok is True
     snapshot = metrics.snapshot()
-    assert snapshot["counters"].get("summary_success") == 1
-    assert snapshot["rolling"]["summary_latency_ms"]["count"] == 1
+    assert snapshot["counters"].get("summary.summary_success") == 1
+    assert snapshot["rolling"]["summary.summary_latency_ms"]["count"] == 1
 
 
 @pytest.mark.asyncio
@@ -371,14 +374,15 @@ async def test_summary_metrics_increment_on_failure(monkeypatch):
         "sentiment": 0.1,
     }
 
-    metrics = MetricsRegistry()
-    monkeypatch.setattr(summary_sidecar, "get_metrics", lambda: metrics)
+    base_metrics = MetricsRegistry()
+    metrics = NamespacedMetricsRegistry(base_metrics, "summary")
+    monkeypatch.setattr(summary_sidecar, "get_metrics", lambda *args, **kwargs: metrics)
 
     ok, _, _, _ = await _run_summary_record(payload, monkeypatch, fail_publish=True)
     assert ok is False
     snapshot = metrics.snapshot()
-    assert snapshot["counters"].get("summary_failures") == 1
-    assert snapshot["counters"].get("summary_dlq") == 1
+    assert snapshot["counters"].get("summary.summary_failures") == 1
+    assert snapshot["counters"].get("summary.summary_dlq") == 1
 
 
 @pytest.mark.asyncio

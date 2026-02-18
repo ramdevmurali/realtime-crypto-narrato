@@ -96,7 +96,7 @@ def llm_summarize(provider: str, api_key: Optional[str], symbol: str, window: st
     except Exception as exc:
         from .metrics import get_metrics
 
-        metrics = get_metrics()
+        metrics = get_metrics("llm")
         metrics.inc("llm_fallbacks")
         fallback_count = metrics.snapshot()["counters"].get("llm_fallbacks", 0)
         if fallback_count == 1 or fallback_count % settings.llm_fallback_log_every == 0:

@@ -59,12 +59,34 @@ class MetricsRegistry:
             "rolling": rolling,
         }
 
+class NamespacedMetricsRegistry:
+    def __init__(self, base: MetricsRegistry, namespace: str):
+        self._base = base
+        self._namespace = namespace.strip().rstrip(".")
+
+    def _key(self, name: str) -> str:
+        prefix = f"{self._namespace}."
+        if name.startswith(prefix):
+            return name
+        return f"{self._namespace}.{name}"
+
+    def inc(self, name: str, value: int = 1) -> None:
+        self._base.inc(self._key(name), value=value)
+
+    def observe(self, name: str, value: float) -> None:
+        self._base.observe(self._key(name), value)
+
+    def snapshot(self) -> Dict[str, Any]:
+        return self._base.snapshot()
+
 
 _GLOBAL_METRICS: MetricsRegistry | None = None
 
 
-def get_metrics() -> MetricsRegistry:
+def get_metrics(namespace: str | None = None):
     global _GLOBAL_METRICS
     if _GLOBAL_METRICS is None:
         _GLOBAL_METRICS = MetricsRegistry()
+    if namespace:
+        return NamespacedMetricsRegistry(_GLOBAL_METRICS, namespace)
     return _GLOBAL_METRICS

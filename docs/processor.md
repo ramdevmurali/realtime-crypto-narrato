@@ -59,9 +59,9 @@ Canonical payload models live in `processor/src/io/models/messages.py`.
 - `prices`: `symbol`, `price`, `time`
 - `news`: `time`, `title`, `source`, `sentiment` (optional: `url`)
   - Note: `news` is the raw headline feed; it is persisted to the `headlines` table and represented by `NewsMsg` / `latest_headline` in code.
-- `summaries` (summary-request): `time`, `symbol`, `window`, `direction`, `ret`, `threshold` (optional: `headline`, `sentiment`)
+- `summaries` (summary-request): `time`, `symbol`, `window`, `direction`, `ret`, `threshold` (optional: `event_id`, `headline`, `sentiment`)
   - Note: this topic carries **summary requests**, not completed summaries.
-- `alerts`: `time`, `symbol`, `window`, `direction`, `ret`, `threshold`, `summary` (optional: `headline`, `sentiment`)
+- `alerts`: `event_id`, `time`, `symbol`, `window`, `direction`, `ret`, `threshold`, `summary` (optional: `headline`, `sentiment`)
   - Note: `window` in Kafka payloads maps to `window_name` in the `anomalies` table.
 - `news-enriched`: same as `news` plus optional `label`, `confidence`, and `event_id` (sentiment sidecar output)
 - `news-deadletter`: raw news messages that failed enrichment (poison-pill avoidance)

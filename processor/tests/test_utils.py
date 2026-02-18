@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import pytest
 
 from processor.src import utils
@@ -74,3 +76,20 @@ async def test_sleep_backoff_uses_jitter_bounds(monkeypatch):
     max_wait = 2 * 1.5
     assert min_wait <= wait <= max_wait
     assert wait <= 4 * 1.5
+
+
+def test_parse_iso_datetime_accepts_z_suffix():
+    parsed = utils.parse_iso_datetime("2026-02-01T00:00:00Z")
+    assert parsed.tzinfo is not None
+    assert parsed.isoformat().endswith("+00:00")
+
+
+def test_parse_iso_datetime_accepts_naive_datetime():
+    parsed = utils.parse_iso_datetime(datetime(2026, 2, 1, 0, 0))
+    assert parsed.tzinfo is not None
+    assert parsed.isoformat().endswith("+00:00")
+
+
+def test_parse_iso_datetime_rejects_invalid_type():
+    with pytest.raises(TypeError):
+        utils.parse_iso_datetime(123)

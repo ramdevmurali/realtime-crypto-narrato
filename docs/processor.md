@@ -124,6 +124,8 @@ PYTHONPATH=processor/src:. .venv/bin/python scripts/replay_summary_dlq.py --path
 ```
 Note: default replays to `summaries` (may re‑LLM). To avoid re‑LLM, replay to DLQ:
 `--topic summaries-deadletter`.
+Warning: replaying to `summaries` will re‑trigger the LLM and can duplicate alerts.
+Prefer `--topic summaries-deadletter` unless you explicitly want re‑LLM.
 
 SSE stream for headlines (rudimentary sentiment):
 ```

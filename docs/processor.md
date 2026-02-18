@@ -202,7 +202,7 @@ If a value is unset/empty, no retention policy is applied for that table.
   `sentiment_dlq`, `sentiment_errors`).
   Summary sidecar exposes `/metrics` on `SUMMARY_METRICS_HOST:SUMMARY_METRICS_PORT`
   and includes counters (`summary_batches`, `summary_success`, `summary_failures`,
-  `summary_dlq`, `summary_publish_skipped`) plus rolling `summary_latency_ms`.
+  `summary_dlq`, `summary_publish_skipped`, `summary_dlq_failed`) plus rolling `summary_latency_ms`.
   These are **telemetry metrics** (operational counters), not the price metrics stored in the `metrics` table.
   Metrics keys may be namespaced by component (e.g., `summary.*`, `processor.*`, `llm.*`).
   Processor counters include `processor.price_insert_failed`, `processor.metric_compute_failed`,

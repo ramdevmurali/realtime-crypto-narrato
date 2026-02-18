@@ -130,6 +130,8 @@ curl -N 'http://localhost:8000/headlines/stream?limit=5&interval=2'
 - Returns/vol are **strict-window**: prices outside the window are not used.
 - Gap handling is controlled by `WINDOW_MAX_GAP_FACTOR` but is clamped to the
   window size to prevent older spillover.
+  Vol gap handling can be tightened separately via `VOL_MAX_GAP_FACTOR`
+  (defaults to `WINDOW_MAX_GAP_FACTOR`).
 
 ## Runtime Policies
 - Late message tolerance: `LATE_PRICE_TOLERANCE_SEC` (drop if older than last seen minus tolerance).

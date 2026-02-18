@@ -149,6 +149,17 @@ def test_get_vol_stale_latest_returns_none(monkeypatch):
     assert win.get_vol(now, timedelta(minutes=5)) is None
 
 
+def test_get_vol_respects_custom_gap_factor(monkeypatch):
+    monkeypatch.setattr(config_module.settings, "vol_resample_sec", 60)
+    monkeypatch.setattr(config_module.settings, "vol_max_gap_factor", 0.5)
+    win = PriceWindow()
+    now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+    win.add(now - timedelta(minutes=5), 100.0)
+    win.add(now - timedelta(minutes=3), 110.0)
+
+    assert win.get_vol(now, timedelta(minutes=5)) is None
+
+
 def test_price_window_prune_resample_horizon(monkeypatch):
     monkeypatch.setattr(config_module.settings, "vol_resample_sec", 60)
     win = PriceWindow()

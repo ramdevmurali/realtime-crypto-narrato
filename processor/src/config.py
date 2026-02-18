@@ -84,6 +84,7 @@ class Settings(BaseSettings):
     rss_seen_ttl_sec: int = 86400  # dedupe TTL for RSS IDs
     rss_seen_max: int = 5000  # max cached RSS IDs
     window_max_gap_factor: float = 1.5  # max allowed gap vs window size
+    vol_max_gap_factor: float | None = None  # override max gap for vol (defaults to window_max_gap_factor)
     vol_resample_sec: int = 5  # cadence for resampling prices in vol calc
     window_history_maxlen: int = 300  # max samples to keep for z-score history
 
@@ -280,6 +281,16 @@ class Settings(BaseSettings):
             raise ValueError("retry_jitter_max must be > 0")
         if self.retry_jitter_min > self.retry_jitter_max:
             raise ValueError("retry_jitter_min must be <= retry_jitter_max")
+        if self.vol_max_gap_factor is not None and self.vol_max_gap_factor <= 0:
+            raise ValueError("vol_max_gap_factor must be > 0")
+        thresholds = {
+            "1m": self.alert_threshold_1m,
+            "5m": self.alert_threshold_5m,
+            "15m": self.alert_threshold_15m,
+        }
+        for label in labels:
+            if thresholds.get(label) is None or thresholds.get(label) <= 0:
+                raise ValueError(f"missing alert threshold for window label: {label}")
         return self
 
     def safe_dict(self):

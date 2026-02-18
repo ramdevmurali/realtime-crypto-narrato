@@ -112,7 +112,8 @@ class PriceWindow:
             return None
         if ref_ts == latest_ts:
             return None
-        max_gap = min(window, window * settings.window_max_gap_factor)
+        vol_gap_factor = settings.vol_max_gap_factor or settings.window_max_gap_factor
+        max_gap = min(window, window * vol_gap_factor)
         if ts - latest_ts > max_gap:
             return None
         if ts - ref_ts > max_gap:

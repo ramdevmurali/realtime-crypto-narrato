@@ -19,6 +19,11 @@ def test_invalid_window_labels_unsupported():
         Settings(window_labels_raw="2m,5m")
 
 
+def test_invalid_thresholds_for_windows():
+    with pytest.raises(ValidationError):
+        Settings(window_labels_raw="1m,5m", alert_threshold_5m=0.0)
+
+
 def test_invalid_llm_provider():
     with pytest.raises(ValidationError):
         Settings(llm_provider="other")

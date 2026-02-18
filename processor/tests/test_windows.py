@@ -74,6 +74,16 @@ def test_get_return_strict_window():
     assert win.get_return(now, timedelta(minutes=5)) is None
 
 
+def test_get_return_stale_latest_returns_none():
+    win = PriceWindow()
+    now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+    win.add(now - timedelta(minutes=10), 100.0)
+    win.add(now - timedelta(minutes=9), 110.0)
+    win.add(now - timedelta(minutes=8), 120.0)
+
+    assert win.get_return(now, timedelta(minutes=5)) is None
+
+
 def test_get_return_insufficient_data():
     win = PriceWindow()
     now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
@@ -120,6 +130,16 @@ def test_get_vol_happy_path(monkeypatch):
 
 
 def test_get_vol_strict_window(monkeypatch):
+    monkeypatch.setattr(config_module.settings, "vol_resample_sec", 60)
+    win = PriceWindow()
+    now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+    win.add(now - timedelta(minutes=10), 100.0)
+    win.add(now - timedelta(minutes=8), 110.0)
+
+    assert win.get_vol(now, timedelta(minutes=5)) is None
+
+
+def test_get_vol_stale_latest_returns_none(monkeypatch):
     monkeypatch.setattr(config_module.settings, "vol_resample_sec", 60)
     win = PriceWindow()
     now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)

@@ -113,6 +113,8 @@ class PriceWindow:
         if ref_ts == latest_ts:
             return None
         max_gap = min(window, window * settings.window_max_gap_factor)
+        if ts - latest_ts > max_gap:
+            return None
         if ts - ref_ts > max_gap:
             return None
         if past_price == 0:
@@ -161,6 +163,8 @@ class PriceWindow:
                 return None
             resampled.append(last_price)
             t += step
+        if ts - last_time > max_gap:
+            return None
 
         if len(resampled) < 3:
             return None

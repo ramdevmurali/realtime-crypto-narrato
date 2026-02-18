@@ -1,4 +1,5 @@
 import asyncio
+import json
 from datetime import datetime
 import contextlib
 import time
@@ -17,15 +18,18 @@ from .services.health import healthcheck
 from .services.price_consumer import consume_prices
 from .runtime_interface import RuntimeService
 from .processor_state import ProcessorStateImpl
+from .metrics import get_metrics
 
 
 class StreamProcessor(ProcessorStateImpl, RuntimeService):
     def __init__(self):
         super().__init__(log=get_logger(__name__))
+        self._metrics_server: asyncio.AbstractServer | None = None
 
     async def start(self):
         self.log.info("processor_starting", extra={"component": "processor"})
         log_startup_config(self.log)
+        await self._start_metrics_server()
         await init_pool()
         await healthcheck(self.log)
         await init_tables()
@@ -53,11 +57,71 @@ class StreamProcessor(ProcessorStateImpl, RuntimeService):
             await self.consumer.stop()
         if self.producer:
             await self.producer.stop()
+        await self._stop_metrics_server()
         await close_pool()
         self.log.info("processor_stopped", extra={"component": "processor"})
 
     async def process_prices_task(self):
         await consume_prices(self)
+
+    async def _handle_metrics(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        closed = False
+        try:
+            request_line = await reader.readline()
+            if not request_line:
+                writer.close()
+                closed = True
+                return
+            parts = request_line.decode(errors="ignore").split()
+            path = parts[1] if len(parts) > 1 else "/"
+            while True:
+                line = await reader.readline()
+                if not line or line == b"\r\n":
+                    break
+            if path != "/metrics":
+                body = json.dumps({"error": "not found"}).encode()
+                status = "404 Not Found"
+            else:
+                body = json.dumps(get_metrics().snapshot()).encode()
+                status = "200 OK"
+            headers = [
+                f"HTTP/1.1 {status}",
+                "Content-Type: application/json",
+                f"Content-Length: {len(body)}",
+                "Connection: close",
+                "",
+                "",
+            ]
+            writer.write("\r\n".join(headers).encode() + body)
+            await writer.drain()
+        finally:
+            if not closed:
+                writer.close()
+
+    async def _start_metrics_server(self) -> None:
+        if not settings.processor_metrics_port:
+            return
+        try:
+            self._metrics_server = await asyncio.start_server(
+                self._handle_metrics,
+                settings.processor_metrics_host,
+                settings.processor_metrics_port,
+            )
+            self.log.info(
+                "processor_metrics_listen",
+                extra={
+                    "host": settings.processor_metrics_host,
+                    "port": settings.processor_metrics_port,
+                },
+            )
+        except Exception as exc:
+            self.log.warning("processor_metrics_start_failed", extra={"error": str(exc)})
+
+    async def _stop_metrics_server(self) -> None:
+        if self._metrics_server:
+            self._metrics_server.close()
+            await self._metrics_server.wait_closed()
+            self._metrics_server = None
 
     async def _run_task_supervisor(self, task_factories: dict[str, Callable[[], asyncio.Task]]) -> None:
         tasks = {}

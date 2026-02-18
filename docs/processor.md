@@ -187,12 +187,15 @@ If a value is unset/empty, no retention policy is applied for that table.
   `SENTIMENT_POS_THRESHOLD`, `SENTIMENT_NEG_THRESHOLD`, `SENTIMENT_MAX_SEQ_LEN`,
   `SENTIMENT_SIDECAR_GROUP`, `NEWS_ENRICHED_TOPIC`, `NEWS_DLQ_TOPIC`.
 - Summary metrics: `SUMMARY_METRICS_HOST`, `SUMMARY_METRICS_PORT` (optional; enable `/metrics`).
+- Processor metrics: `PROCESSOR_METRICS_HOST`, `PROCESSOR_METRICS_PORT` (optional; enable `/metrics`).
 - Sentiment perf logs: `sentiment_infer_ms`, `batch_size`, `queue_lag_ms`, `fallback_used`.
   If `SENTIMENT_MAX_LATENCY_MS` is set, slow batches log `sentiment_batch_slow`.
   Fallback warnings are rate-limited by `SENTIMENT_FALLBACK_LOG_EVERY`.
 - Startup check: if `SENTIMENT_PROVIDER=onnx`, the sidecar attempts a model load on start.
   Failure logs `sentiment_model_load_failed` and continues unless `SENTIMENT_FAIL_FAST=true`.
-- Metrics endpoint: sentiment sidecar exposes `/metrics` (JSON) on
+- Metrics endpoint: processor exposes `/metrics` (JSON) on
+  `PROCESSOR_METRICS_HOST:PROCESSOR_METRICS_PORT`.
+  Sentiment sidecar exposes `/metrics` (JSON) on
   `SENTIMENT_METRICS_HOST:SENTIMENT_METRICS_PORT` and includes rolling stats for
   inference and queue lag plus counters (`sentiment_batches`, `sentiment_fallbacks`,
   `sentiment_dlq`, `sentiment_errors`).

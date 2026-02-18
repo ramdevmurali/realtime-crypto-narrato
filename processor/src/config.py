@@ -120,6 +120,8 @@ class Settings(BaseSettings):
     task_restart_max_per_min: int = 10
     sidecar_restart_backoff_sec: float = 2.0
     sidecar_restart_max_per_min: int = 10
+    processor_metrics_host: str = "0.0.0.0"
+    processor_metrics_port: int | None = 9102
     retention_prices_days: int | None = None
     retention_metrics_days: int | None = None
     retention_headlines_days: int | None = None
@@ -251,6 +253,15 @@ class Settings(BaseSettings):
     @field_validator("summary_metrics_port")
     @classmethod
     def _positive_optional_summary_metrics(cls, v):
+        if v is None:
+            return v
+        if v <= 0:
+            raise ValueError("must be positive")
+        return v
+
+    @field_validator("processor_metrics_port")
+    @classmethod
+    def _positive_optional_processor_metrics(cls, v):
         if v is None:
             return v
         if v <= 0:

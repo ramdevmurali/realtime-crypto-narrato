@@ -146,6 +146,15 @@ curl -N 'http://localhost:8000/headlines/stream?limit=5&interval=2'
   Vol gap handling can be tightened separately via `VOL_MAX_GAP_FACTOR`
   (defaults to `WINDOW_MAX_GAP_FACTOR`).
 
+## DB retention (optional)
+Retention policies are applied only when you run `scripts/migrate_db.py`.
+Set any of these env vars to enable:
+- `RETENTION_PRICES_DAYS` (default 30 if set)
+- `RETENTION_METRICS_DAYS` (default 30 if set)
+- `RETENTION_HEADLINES_DAYS` (default 90 if set)
+- `RETENTION_ANOMALIES_DAYS` (default 90 if set)
+If a value is unset/empty, no retention policy is applied for that table.
+
 ## Runtime Policies
 - Late message tolerance: `LATE_PRICE_TOLERANCE_SEC` (drop if older than last seen minus tolerance).
 - Anomaly cooldown: `ANOMALY_COOLDOWN_SEC` (per symbol+window).

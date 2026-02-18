@@ -85,11 +85,25 @@ DDL = [
 ]
 
 
+async def _apply_retention(conn, table: str, days: int | None) -> None:
+    if days is None:
+        return
+    await conn.execute(
+        "SELECT add_retention_policy($1, INTERVAL '1 day' * $2, if_not_exists => TRUE);",
+        table,
+        days,
+    )
+
+
 async def migrate() -> None:
     conn = await asyncpg.connect(dsn=settings.database_url)
     try:
         for stmt in DDL:
             await conn.execute(stmt)
+        await _apply_retention(conn, "prices", settings.retention_prices_days)
+        await _apply_retention(conn, "metrics", settings.retention_metrics_days)
+        await _apply_retention(conn, "headlines", settings.retention_headlines_days)
+        await _apply_retention(conn, "anomalies", settings.retention_anomalies_days)
     finally:
         await conn.close()
 

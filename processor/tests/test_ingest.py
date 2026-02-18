@@ -221,3 +221,50 @@ async def test_price_ingest_task_publishes_once(monkeypatch):
     topic, payload = proc.producer.sent[0]
     assert topic == settings.price_topic
     assert b"43210.12" in payload
+
+
+@pytest.mark.asyncio
+async def test_price_ingest_task_uses_event_time(monkeypatch):
+    event_ms = 1769515200000
+    fake_msg = json.dumps({
+        "data": {"s": "BTCUSDT", "c": "43210.12", "E": event_ms}
+    })
+
+    def fake_connect(url):
+        return FakeWS([fake_msg])
+
+    monkeypatch.setattr(ingest.websockets, "connect", fake_connect)
+
+    proc = FakeProcessor()
+    proc.producer = FakeProducer()
+
+    with pytest.raises(FakeWS.StopStream):
+        await ingest.price_ingest_task(proc)
+
+    _, payload = proc.producer.sent[0]
+    data = json.loads(payload.decode())
+    assert data["time"].startswith("2026-01-27T12:00:00")
+
+
+@pytest.mark.asyncio
+async def test_price_ingest_task_falls_back_to_now(monkeypatch):
+    fake_msg = json.dumps({
+        "data": {"s": "BTCUSDT", "c": "43210.12"}
+    })
+
+    def fake_connect(url):
+        return FakeWS([fake_msg])
+
+    fixed_now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(ingest, "now_utc", lambda: fixed_now)
+    monkeypatch.setattr(ingest.websockets, "connect", fake_connect)
+
+    proc = FakeProcessor()
+    proc.producer = FakeProducer()
+
+    with pytest.raises(FakeWS.StopStream):
+        await ingest.price_ingest_task(proc)
+
+    _, payload = proc.producer.sent[0]
+    data = json.loads(payload.decode())
+    assert data["time"].startswith("2026-01-27T12:00:00")

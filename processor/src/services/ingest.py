@@ -1,7 +1,7 @@
 import asyncio
 import json
 from collections import deque
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import feedparser
 import websockets
 from dateutil import parser as dateparser
@@ -103,7 +103,14 @@ async def price_ingest_task(processor: ProcessorState):
                     payload = data.get("data", {})
                     symbol = payload.get("s", "").lower()
                     price = float(payload.get("c", 0))
-                    ts = now_utc()
+                    event_ms = payload.get("E")
+                    if event_ms:
+                        try:
+                            ts = datetime.fromtimestamp(event_ms / 1000, tz=timezone.utc)
+                        except Exception:
+                            ts = now_utc()
+                    else:
+                        ts = now_utc()
                     msg = PriceMsg(symbol=symbol, price=price, time=ts)
                     await with_retries(processor.producer.send_and_wait, settings.price_topic, msg.to_bytes(), log=log, op="send_price")
                     log.info("price_published", extra={"symbol": symbol, "price": price})

@@ -24,7 +24,18 @@ class FakeProducer:
         self.sent.append((topic, payload))
 
 
-async def _run_summary_record(payload, monkeypatch, llm_result="LLM SUMMARY", fail_llm=False, fail_publish=False, consumer=None, producer=None, pool=None):
+async def _run_summary_record(
+    payload,
+    monkeypatch,
+    llm_result="LLM SUMMARY",
+    fail_llm=False,
+    fail_publish=False,
+    consumer=None,
+    producer=None,
+    pool=None,
+    fetch_published=None,
+    mark_published=None,
+):
     class FakeConsumer:
         def __init__(self):
             self.commits = []
@@ -56,6 +67,15 @@ async def _run_summary_record(payload, monkeypatch, llm_result="LLM SUMMARY", fa
             raise RuntimeError("fail")
         monkeypatch.setattr(summary_sidecar, "publish_summary_alert", fail_handle)
 
+    if fetch_published is None:
+        async def fetch_published(*args, **kwargs):
+            return False
+    if mark_published is None:
+        async def mark_published(*args, **kwargs):
+            return None
+
+    monkeypatch.setattr(summary_sidecar, "fetch_anomaly_alert_published", fetch_published)
+    monkeypatch.setattr(summary_sidecar, "mark_anomaly_alert_published", mark_published)
     monkeypatch.setattr(summary_sidecar, "with_retries", no_retry)
 
     consumer = consumer or FakeConsumer()
@@ -187,6 +207,73 @@ async def test_summary_preserves_event_id(monkeypatch):
     assert topic == settings.alerts_topic
     out = json.loads(out_payload.decode())
     assert out["event_id"] == payload["event_id"]
+
+
+@pytest.mark.asyncio
+async def test_summary_skips_publish_when_already_published(monkeypatch):
+    payload = {
+        "time": "2026-01-27T12:00:00+00:00",
+        "symbol": "btcusdt",
+        "window": "1m",
+        "direction": "up",
+        "ret": 0.07,
+        "threshold": 0.05,
+        "headline": "headline",
+        "sentiment": 0.1,
+    }
+
+    async def published_true(*args, **kwargs):
+        return True
+
+    async def fail_publish(*args, **kwargs):
+        raise AssertionError("publish should be skipped when already published")
+
+    async def fail_mark(*args, **kwargs):
+        raise AssertionError("mark should be skipped when already published")
+
+    monkeypatch.setattr(summary_sidecar, "publish_summary_alert", fail_publish)
+
+    ok, consumer, producer, pool = await _run_summary_record(
+        payload,
+        monkeypatch,
+        fetch_published=published_true,
+        mark_published=fail_mark,
+    )
+    assert ok is True
+    assert len(producer.sent) == 0
+    assert len(pool.calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_summary_publishes_and_marks_when_unpublished(monkeypatch):
+    payload = {
+        "time": "2026-01-27T12:00:00+00:00",
+        "symbol": "btcusdt",
+        "window": "1m",
+        "direction": "up",
+        "ret": 0.07,
+        "threshold": 0.05,
+        "headline": "headline",
+        "sentiment": 0.1,
+    }
+
+    calls = {"mark": 0}
+
+    async def published_false(*args, **kwargs):
+        return False
+
+    async def mark_called(*args, **kwargs):
+        calls["mark"] += 1
+
+    ok, consumer, producer, pool = await _run_summary_record(
+        payload,
+        monkeypatch,
+        fetch_published=published_false,
+        mark_published=mark_called,
+    )
+    assert ok is True
+    assert len(producer.sent) == 1
+    assert calls["mark"] == 1
 
 
 @pytest.mark.asyncio

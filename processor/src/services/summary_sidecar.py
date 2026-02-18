@@ -9,7 +9,7 @@ from ..config import settings
 from ..logging_config import get_logger
 from ..runtime_interface import RuntimeService
 from ..metrics import get_metrics
-from ..io.db import init_pool
+from ..io.db import init_pool, fetch_anomaly_alert_published, mark_anomaly_alert_published
 from ..utils import llm_summarize, with_retries, now_utc
 from ..io.models.messages import SummaryRequestMsg, AlertMsg
 from .sidecar_runtime import SidecarRuntime
@@ -201,6 +201,18 @@ async def process_summary_record(msg, consumer, producer, pool, log, semaphore: 
             log=log,
             op="persist_summary",
         )
+        published = await with_retries(
+            fetch_anomaly_alert_published,
+            payload["time"],
+            payload["symbol"],
+            payload["window"],
+            log=log,
+            op="fetch_anomaly_alert_published",
+        )
+        if published:
+            log.info("summary_alert_already_published", extra={"event_id": event_id})
+            await _commit_message(consumer, msg, log)
+            return True
         await with_retries(
             publish_summary_alert,
             payload,
@@ -211,6 +223,17 @@ async def process_summary_record(msg, consumer, producer, pool, log, semaphore: 
             log=log,
             op="publish_summary_alert",
         )
+        try:
+            await with_retries(
+                mark_anomaly_alert_published,
+                payload["time"],
+                payload["symbol"],
+                payload["window"],
+                log=log,
+                op="mark_anomaly_alert_published",
+            )
+        except Exception as exc:
+            log.warning("summary_alert_mark_failed", extra={"event_id": event_id, "error": str(exc)})
         await _commit_message(consumer, msg, log)
         return True
     except Exception as exc:

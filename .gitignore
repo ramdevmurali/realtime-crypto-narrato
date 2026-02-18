@@ -6,6 +6,7 @@ __pycache__/
 TODO.md
 .TODO.md
 .venv/
+.venv-backend/
 .DS_Store
 models/finbert/*
 !models/finbert/README.md

@@ -1,5 +1,7 @@
 import asyncio
 import json
+import base64
+from pathlib import Path
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 from aiokafka.structs import TopicPartition, OffsetAndMetadata
 
@@ -8,12 +10,50 @@ from ..logging_config import get_logger
 from ..runtime_interface import RuntimeService
 from ..metrics import get_metrics
 from ..io.db import init_pool
-from ..utils import llm_summarize, with_retries
+from ..utils import llm_summarize, with_retries, now_utc
 from ..io.models.messages import SummaryRequestMsg, AlertMsg
 from .sidecar_runtime import SidecarRuntime
 
 
 log = get_logger(__name__)
+
+
+def _rotate_dlq_buffer(path: Path, max_bytes: int, log) -> None:
+    if max_bytes <= 0:
+        return
+    try:
+        if not path.exists():
+            return
+        if path.stat().st_size <= max_bytes:
+            return
+        log.warning(
+            "summary_dlq_buffer_rotate",
+            extra={"path": str(path), "size": path.stat().st_size, "max_bytes": max_bytes},
+        )
+        # rotate up to 3 backups
+        for idx in range(3, 0, -1):
+            src = Path(f"{path}.{idx}")
+            dst = Path(f"{path}.{idx + 1}")
+            if src.exists():
+                src.replace(dst)
+        path.replace(Path(f"{path}.1"))
+    except Exception as exc:
+        log.warning("summary_dlq_buffer_rotate_failed", extra={"error": str(exc), "path": str(path)})
+
+
+def _append_summary_dlq_buffer(payload: bytes, log) -> None:
+    path = Path(settings.summary_dlq_buffer_path)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        _rotate_dlq_buffer(path, settings.summary_dlq_buffer_max_bytes, log)
+        record = {
+            "time": now_utc().isoformat(),
+            "payload_b64": base64.b64encode(payload).decode("ascii"),
+        }
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record) + "\n")
+    except Exception as exc:
+        log.warning("summary_dlq_buffer_write_failed", extra={"error": str(exc), "path": str(path)})
 
 
 class SummarySidecar(SidecarRuntime, RuntimeService):
@@ -187,6 +227,7 @@ async def process_summary_record(msg, consumer, producer, pool, log, semaphore: 
             metrics = get_metrics()
             metrics.inc("summary_dlq_failed")
             log.error("summary_dlq_failed", extra={"error": str(dlq_exc), "offset": msg.offset})
+            _append_summary_dlq_buffer(msg.value, log)
         await _commit_message(consumer, msg, log)
         return False
 

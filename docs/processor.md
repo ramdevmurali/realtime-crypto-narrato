@@ -106,6 +106,12 @@ KAFKA_BROKERS_RAW=localhost:9092 \
 PYTHONPATH=processor/src:. .venv/bin/python scripts/replay_headlines.py --since-hours 24 --limit 50
 ```
 
+Replay buffered summary requests (if summary DLQ send failed):
+```
+KAFKA_BROKERS_RAW=localhost:9092 \
+PYTHONPATH=processor/src:. .venv/bin/python scripts/replay_summary_dlq.py --path summary_dlq_buffer.jsonl
+```
+
 SSE stream for headlines (rudimentary sentiment):
 ```
 curl -N 'http://localhost:8000/headlines/stream?limit=5&interval=2'
@@ -139,6 +145,7 @@ curl -N 'http://localhost:8000/headlines/stream?limit=5&interval=2'
 - Metrics tuning: `EWMA_Z_CAP`, `PERCENTILE_MIN_SAMPLES`.
 - Alert logging: `ALERT_LOG_EVERY`.
 - Summary sidecar: `SUMMARY_LLM_CONCURRENCY`.
+- Summary DLQ buffer: `SUMMARY_DLQ_BUFFER_PATH`, `SUMMARY_DLQ_BUFFER_MAX_BYTES` (JSONL append-only).
 - LLM generation: `LLM_MAX_TOKENS`, `LLM_TEMPERATURE`.
 - LLM fallback logging: `LLM_FALLBACK_LOG_EVERY` and counter `llm_fallbacks`.
 - Anomaly hot path summary: `ANOMALY_HOTPATH_STUB_SUMMARY` (default true for low latency).

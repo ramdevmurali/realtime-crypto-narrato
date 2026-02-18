@@ -103,6 +103,8 @@ class Settings(BaseSettings):
     alerts_topic: str = "alerts"
     summaries_topic: str = "summaries"
     summaries_dlq_topic: str = "summaries-deadletter"
+    summary_dlq_buffer_path: str = "summary_dlq_buffer.jsonl"
+    summary_dlq_buffer_max_bytes: int = 50 * 1024 * 1024
     price_dlq_topic: str = "prices-deadletter"
     news_dlq_topic: str = "news-deadletter"
     processor_consumer_group: str = "processor"
@@ -165,6 +167,7 @@ class Settings(BaseSettings):
         "news_poll_interval_sec",
         "news_batch_limit",
         "summary_llm_concurrency",
+        "summary_dlq_buffer_max_bytes",
         "retry_max_attempts",
         "retry_backoff_base_sec",
         "retry_backoff_cap_sec",

@@ -1,5 +1,6 @@
 import asyncio
 import json
+import base64
 import pytest
 
 from processor.src.services import summary_sidecar  # type: ignore
@@ -236,3 +237,61 @@ async def test_summary_dlq_failure_increments_metric(monkeypatch):
     assert ok is False
     after = metrics.snapshot()["counters"].get("summary_dlq_failed", 0)
     assert after == before + 1
+
+
+@pytest.mark.asyncio
+async def test_summary_dlq_failure_buffers_message(monkeypatch, tmp_path):
+    payload = {
+        "time": "2026-01-27T12:00:00+00:00",
+        "symbol": "btcusdt",
+        "window": "1m",
+        "direction": "up",
+        "ret": 0.07,
+        "threshold": 0.05,
+        "headline": "headline",
+        "sentiment": 0.1,
+    }
+
+    class FailingProducer(FakeProducer):
+        async def send_and_wait(self, topic, payload):
+            raise RuntimeError("dlq fail")
+
+    buffer_path = tmp_path / "summary_dlq.jsonl"
+    monkeypatch.setattr(settings, "summary_dlq_buffer_path", str(buffer_path))
+    monkeypatch.setattr(settings, "summary_dlq_buffer_max_bytes", 1024)
+
+    ok, _, _, _ = await _run_summary_record(
+        payload,
+        monkeypatch,
+        fail_publish=True,
+        producer=FailingProducer(),
+    )
+    assert ok is False
+    assert buffer_path.exists()
+    lines = buffer_path.read_text().strip().splitlines()
+    assert len(lines) == 1
+    record = json.loads(lines[0])
+    decoded = base64.b64decode(record["payload_b64"])
+    assert json.loads(decoded.decode())["symbol"] == "btcusdt"
+
+
+@pytest.mark.asyncio
+async def test_summary_dlq_success_does_not_buffer(monkeypatch, tmp_path):
+    payload = {
+        "time": "2026-01-27T12:00:00+00:00",
+        "symbol": "btcusdt",
+        "window": "1m",
+        "direction": "up",
+        "ret": 0.07,
+        "threshold": 0.05,
+        "headline": "headline",
+        "sentiment": 0.1,
+    }
+
+    buffer_path = tmp_path / "summary_dlq.jsonl"
+    monkeypatch.setattr(settings, "summary_dlq_buffer_path", str(buffer_path))
+    monkeypatch.setattr(settings, "summary_dlq_buffer_max_bytes", 1024)
+
+    ok, _, _, _ = await _run_summary_record(payload, monkeypatch, fail_publish=True)
+    assert ok is False
+    assert not buffer_path.exists()

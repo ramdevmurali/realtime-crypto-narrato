@@ -145,6 +145,7 @@ curl -N 'http://localhost:8000/headlines/stream?limit=5&interval=2'
   window size to prevent older spillover.
   Vol gap handling can be tightened separately via `VOL_MAX_GAP_FACTOR`
   (defaults to `WINDOW_MAX_GAP_FACTOR`).
+Note: this section is about **in‑memory window retention**, not DB retention. See **DB retention (optional)** below.
 
 ## DB retention (optional)
 Retention policies are applied only when you run `scripts/migrate_db.py`.

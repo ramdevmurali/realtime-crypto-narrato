@@ -121,9 +121,6 @@ async def init_tables():
                 );
                 """
             )
-            await conn.execute(
-                "ALTER TABLE anomalies ADD COLUMN IF NOT EXISTS alert_published BOOLEAN DEFAULT TRUE;"
-            )
             await conn.execute("SELECT create_hypertable('anomalies','time', if_not_exists => TRUE);")
             await conn.execute("CREATE INDEX IF NOT EXISTS idx_anomalies_symbol_time_desc ON anomalies(symbol, time DESC);")
     except Exception as exc:

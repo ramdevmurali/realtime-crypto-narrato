@@ -1,4 +1,5 @@
 import asyncpg
+from datetime import datetime
 from typing import Optional
 
 from .config import settings
@@ -44,19 +45,45 @@ async def fetch_latest_metrics(symbol: str):
     return await pool.fetchrow(query, symbol)
 
 
-async def fetch_headlines(limit: int = 20):
+async def fetch_headlines(limit: int = 20, since: datetime | None = None):
     pool = await get_pool()
+    if since is None:
+        query = """
+            SELECT time, title, url, source, sentiment
+            FROM headlines
+            ORDER BY time DESC
+            LIMIT $1
+        """
+        return await pool.fetch(query, limit)
     query = """
         SELECT time, title, url, source, sentiment
         FROM headlines
+        WHERE time >= $1
         ORDER BY time DESC
-        LIMIT $1
+        LIMIT $2
     """
-    return await pool.fetch(query, limit)
+    return await pool.fetch(query, since, limit)
 
 
-async def fetch_alerts(limit: int = 20):
+async def fetch_alerts(limit: int = 20, since: datetime | None = None):
     pool = await get_pool()
+    if since is None:
+        query = """
+            SELECT
+                time,
+                symbol,
+                window_name AS window,
+                return_value AS return,
+                direction,
+                threshold,
+                summary,
+                headline,
+                sentiment
+            FROM anomalies
+            ORDER BY time DESC
+            LIMIT $1
+        """
+        return await pool.fetch(query, limit)
     query = """
         SELECT
             time,
@@ -69,7 +96,8 @@ async def fetch_alerts(limit: int = 20):
             headline,
             sentiment
         FROM anomalies
+        WHERE time >= $1
         ORDER BY time DESC
-        LIMIT $1
+        LIMIT $2
     """
-    return await pool.fetch(query, limit)
+    return await pool.fetch(query, since, limit)

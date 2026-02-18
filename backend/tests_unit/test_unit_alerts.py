@@ -10,7 +10,7 @@ from backend.app import main, db
 def test_alerts(monkeypatch):
     calls = {}
 
-    async def fake_fetch_alerts(limit):
+    async def fake_fetch_alerts(limit, since=None):
         calls["limit"] = limit
         return [
             {
@@ -36,6 +36,24 @@ def test_alerts(monkeypatch):
     assert isinstance(body, list) and len(body) == 1
     expected_keys = {"time", "symbol", "window", "direction", "return", "threshold", "summary", "headline", "sentiment"}
     assert set(body[0].keys()) == expected_keys
+
+
+def test_alerts_since_passed(monkeypatch):
+    calls = {}
+    expected_since = datetime(2026, 1, 27, 12, 0, 0, tzinfo=timezone.utc)
+
+    async def fake_fetch_alerts(limit, since=None):
+        calls["limit"] = limit
+        calls["since"] = since
+        return []
+
+    monkeypatch.setattr(db, "fetch_alerts", fake_fetch_alerts)
+
+    client = TestClient(main.app)
+    resp = client.get("/alerts", params={"limit": 2, "since": "2026-01-27T12:00:00Z"})
+    assert resp.status_code == 200
+    assert calls["limit"] == 2
+    assert calls["since"] == expected_since
 
 
 def test_alerts_stream_payload(monkeypatch):

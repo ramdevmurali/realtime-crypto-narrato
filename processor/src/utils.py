@@ -134,6 +134,11 @@ async def with_retries(fn, *args, max_attempts: int | None = None, log=None, op:
             return await fn(*args, **kwargs)
         except Exception as exc:
             attempt += 1
+            from .metrics import get_metrics
+
+            metrics = get_metrics("processor")
+            metrics.inc("retry.total")
+            metrics.inc(f"retry.{op_name}")
             if log:
                 log.warning("op_failed", extra={"op": op_name, "attempt": attempt, "error": str(exc)})
             if attempt >= max_attempts:

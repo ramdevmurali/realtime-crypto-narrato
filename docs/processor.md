@@ -207,7 +207,8 @@ If a value is unset/empty, no retention policy is applied for that table.
   Metrics keys may be namespaced by component (e.g., `summary.*`, `processor.*`, `llm.*`).
   Processor counters include `processor.price_insert_failed`, `processor.metric_compute_failed`,
   `processor.metric_insert_failed`, `processor.anomaly_check_failed`,
-  `processor.price_dlq_sent`, `processor.price_dlq_send_failed`, `processor.price_pipeline_failed`.
+  `processor.price_dlq_sent`, `processor.price_dlq_send_failed`, `processor.price_pipeline_failed`,
+  `processor.retry.total`, and `processor.retry.<op_name>`.
   Metrics snapshots also include `service_name` and `start_time` for instance identity.
 - Ingest telemetry counters: `price_ingest_failures`, `price_ingest_retries`,
   `news_ingest_failures`, `news_ingest_retries`.

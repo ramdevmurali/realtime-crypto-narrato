@@ -46,3 +46,5 @@ async def test_processor_metrics_handler_returns_json():
     payload = json.loads(body.decode())
     assert "counters" in payload
     assert "rolling" in payload
+    assert payload["service_name"] == "processor"
+    assert "start_time" in payload

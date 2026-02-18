@@ -52,7 +52,7 @@ def _expected_event_id(payload: NewsMsg) -> str:
 
 
 async def _run_sentiment_flow(messages, consumer, producer, pool):
-    metrics = sentiment_sidecar.MetricsRegistry()
+    metrics = sentiment_sidecar.MetricsRegistry(service_name="sentiment_sidecar")
     parsed, results, fallback_used, *_ = await sentiment_sidecar.infer_sentiment_batch(
         messages,
         consumer,

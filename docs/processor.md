@@ -207,6 +207,7 @@ If a value is unset/empty, no retention policy is applied for that table.
   Processor counters include `processor.price_insert_failed`, `processor.metric_compute_failed`,
   `processor.metric_insert_failed`, `processor.anomaly_check_failed`,
   `processor.price_dlq_sent`, `processor.price_dlq_send_failed`.
+  Metrics snapshots also include `service_name` and `start_time` for instance identity.
 - Ingest telemetry counters: `price_ingest_failures`, `price_ingest_retries`,
   `news_ingest_failures`, `news_ingest_retries`.
 - Light runtime: set `SENTIMENT_LIGHT_RUNTIME=true` to use `tokenizers` directly

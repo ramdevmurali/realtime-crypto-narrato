@@ -199,10 +199,10 @@ class SentimentSidecar(SidecarRuntime, RuntimeService):
     def __init__(self):
         super().__init__(log, "sentiment_sidecar_stop")
         self._metrics_server: asyncio.AbstractServer | None = None
-        self.metrics = MetricsRegistry()
+        self.metrics = MetricsRegistry(service_name="sentiment_sidecar")
 
     def reset(self) -> None:
-        self.metrics = MetricsRegistry()
+        self.metrics = MetricsRegistry(service_name="sentiment_sidecar")
 
     async def _handle_metrics(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         closed = False

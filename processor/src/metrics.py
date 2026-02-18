@@ -31,11 +31,13 @@ class RollingStats:
 
 
 class MetricsRegistry:
-    def __init__(self, rolling_window: int = 100):
+    def __init__(self, rolling_window: int = 100, service_name: str | None = None):
         self._lock = Lock()
         self._counters: Dict[str, int] = {}
         self._rolling: Dict[str, RollingStats] = {}
         self._rolling_window = rolling_window
+        self._service_name = service_name
+        self._start_time = now_utc().isoformat()
 
     def inc(self, name: str, value: int = 1) -> None:
         with self._lock:
@@ -55,6 +57,8 @@ class MetricsRegistry:
             rolling = {name: stat.snapshot() for name, stat in self._rolling.items()}
         return {
             "timestamp": now_utc().isoformat(),
+            "service_name": self._service_name,
+            "start_time": self._start_time,
             "counters": counters,
             "rolling": rolling,
         }
@@ -86,7 +90,7 @@ _GLOBAL_METRICS: MetricsRegistry | None = None
 def get_metrics(namespace: str | None = None):
     global _GLOBAL_METRICS
     if _GLOBAL_METRICS is None:
-        _GLOBAL_METRICS = MetricsRegistry()
+        _GLOBAL_METRICS = MetricsRegistry(service_name="processor")
     if namespace:
         return NamespacedMetricsRegistry(_GLOBAL_METRICS, namespace)
     return _GLOBAL_METRICS

@@ -233,7 +233,7 @@ async def test_summary_skips_publish_when_already_published(monkeypatch):
 
     monkeypatch.setattr(summary_sidecar, "publish_summary_alert", fail_publish)
 
-    base_metrics = MetricsRegistry()
+    base_metrics = MetricsRegistry(service_name="summary_sidecar")
     metrics = NamespacedMetricsRegistry(base_metrics, "summary")
     monkeypatch.setattr(summary_sidecar, "get_metrics", lambda *args, **kwargs: metrics)
 
@@ -322,7 +322,7 @@ async def test_summary_dlq_failure_increments_metric(monkeypatch, tmp_path):
     monkeypatch.setattr(settings, "summary_dlq_buffer_path", str(buffer_path))
     monkeypatch.setattr(settings, "summary_dlq_buffer_max_bytes", 1024)
 
-    base_metrics = MetricsRegistry()
+    base_metrics = MetricsRegistry(service_name="summary_sidecar")
     metrics = NamespacedMetricsRegistry(base_metrics, "summary")
     monkeypatch.setattr(summary_sidecar, "get_metrics", lambda *args, **kwargs: metrics)
     before = metrics.snapshot()["counters"].get("summary.summary_dlq_failed", 0)
@@ -350,7 +350,7 @@ async def test_summary_metrics_increment_on_success(monkeypatch):
         "sentiment": 0.1,
     }
 
-    base_metrics = MetricsRegistry()
+    base_metrics = MetricsRegistry(service_name="summary_sidecar")
     metrics = NamespacedMetricsRegistry(base_metrics, "summary")
     monkeypatch.setattr(summary_sidecar, "get_metrics", lambda *args, **kwargs: metrics)
 
@@ -374,7 +374,7 @@ async def test_summary_metrics_increment_on_failure(monkeypatch):
         "sentiment": 0.1,
     }
 
-    base_metrics = MetricsRegistry()
+    base_metrics = MetricsRegistry(service_name="summary_sidecar")
     metrics = NamespacedMetricsRegistry(base_metrics, "summary")
     monkeypatch.setattr(summary_sidecar, "get_metrics", lambda *args, **kwargs: metrics)
 

@@ -1,6 +1,9 @@
 import asyncio
 from datetime import datetime
 import contextlib
+import time
+from collections import deque
+from typing import Callable
 
 from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
 
@@ -37,19 +40,13 @@ class StreamProcessor(ProcessorStateImpl, RuntimeService):
         )
         await self.consumer.start()
 
-        tasks = [
-            asyncio.create_task(price_ingest_task(self)),
-            asyncio.create_task(news_ingest_task(self)),
-            asyncio.create_task(self.process_prices_task()),
-        ]
-        try:
-            await asyncio.gather(*tasks)
-        except asyncio.CancelledError:
-            self.log.info("processor_cancelled")
-        finally:
-            for t in tasks:
-                t.cancel()
-            await asyncio.gather(*tasks, return_exceptions=True)
+        await self._run_task_supervisor(
+            {
+                "price_ingest": lambda: asyncio.create_task(price_ingest_task(self)),
+                "news_ingest": lambda: asyncio.create_task(news_ingest_task(self)),
+                "price_consume": lambda: asyncio.create_task(self.process_prices_task()),
+            }
+        )
 
     async def stop(self):
         if self.consumer:
@@ -61,6 +58,55 @@ class StreamProcessor(ProcessorStateImpl, RuntimeService):
 
     async def process_prices_task(self):
         await consume_prices(self)
+
+    async def _run_task_supervisor(self, task_factories: dict[str, Callable[[], asyncio.Task]]) -> None:
+        tasks = {}
+        task_names = {}
+        restart_times = deque()
+
+        for name, factory in task_factories.items():
+            task = factory()
+            tasks[name] = task
+            task_names[task] = name
+
+        try:
+            while True:
+                done, _ = await asyncio.wait(tasks.values(), return_when=asyncio.FIRST_COMPLETED)
+                for task in done:
+                    name = task_names.pop(task, "unknown")
+                    tasks.pop(name, None)
+                    try:
+                        exc = task.exception()
+                    except asyncio.CancelledError:
+                        exc = None
+                    if exc:
+                        self.log.error("task_failed", extra={"task": name, "error": str(exc)})
+                    else:
+                        self.log.warning("task_exited", extra={"task": name})
+
+                    now = time.monotonic()
+                    restart_times.append(now)
+                    while restart_times and now - restart_times[0] > 60:
+                        restart_times.popleft()
+                    if len(restart_times) > settings.task_restart_max_per_min:
+                        self.log.error(
+                            "task_restart_throttled",
+                            extra={"max_per_min": settings.task_restart_max_per_min, "task": name},
+                        )
+                        await asyncio.sleep(60)
+                        restart_times.clear()
+
+                    await asyncio.sleep(settings.task_restart_backoff_sec)
+                    new_task = task_factories[name]()
+                    tasks[name] = new_task
+                    task_names[new_task] = name
+        except asyncio.CancelledError:
+            self.log.info("task_supervisor_cancelled")
+            raise
+        finally:
+            for t in tasks.values():
+                t.cancel()
+            await asyncio.gather(*tasks.values(), return_exceptions=True)
 
     async def commit_msg(self, msg):
         try:

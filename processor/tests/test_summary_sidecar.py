@@ -210,7 +210,7 @@ async def test_process_summary_record_sends_dlq_on_failure(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_summary_dlq_failure_increments_metric(monkeypatch):
+async def test_summary_dlq_failure_increments_metric(monkeypatch, tmp_path):
     payload = {
         "time": "2026-01-27T12:00:00+00:00",
         "symbol": "btcusdt",
@@ -225,6 +225,10 @@ async def test_summary_dlq_failure_increments_metric(monkeypatch):
     class FailingProducer(FakeProducer):
         async def send_and_wait(self, topic, payload):
             raise RuntimeError("dlq fail")
+
+    buffer_path = tmp_path / "summary_dlq.jsonl"
+    monkeypatch.setattr(settings, "summary_dlq_buffer_path", str(buffer_path))
+    monkeypatch.setattr(settings, "summary_dlq_buffer_max_bytes", 1024)
 
     metrics = get_metrics()
     before = metrics.snapshot()["counters"].get("summary_dlq_failed", 0)

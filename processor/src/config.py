@@ -112,6 +112,8 @@ class Settings(BaseSettings):
     summary_poll_timeout_ms: int = 500
     summary_batch_max: int | None = None
     summary_llm_concurrency: int = 2
+    task_restart_backoff_sec: float = 2.0
+    task_restart_max_per_min: int = 10
 
     sentiment_provider: str = "stub"  # stub|onnx
     sentiment_model_path: str | None = None
@@ -167,6 +169,8 @@ class Settings(BaseSettings):
         "news_poll_interval_sec",
         "news_batch_limit",
         "summary_llm_concurrency",
+        "task_restart_backoff_sec",
+        "task_restart_max_per_min",
         "summary_dlq_buffer_max_bytes",
         "retry_max_attempts",
         "retry_backoff_base_sec",

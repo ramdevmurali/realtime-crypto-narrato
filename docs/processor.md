@@ -145,6 +145,7 @@ curl -N 'http://localhost:8000/headlines/stream?limit=5&interval=2'
 - Metrics tuning: `EWMA_Z_CAP`, `PERCENTILE_MIN_SAMPLES`.
 - Alert logging: `ALERT_LOG_EVERY`.
 - Summary sidecar: `SUMMARY_LLM_CONCURRENCY`.
+- Task restart policy: `TASK_RESTART_BACKOFF_SEC`, `TASK_RESTART_MAX_PER_MIN`.
 - Summary DLQ buffer: `SUMMARY_DLQ_BUFFER_PATH`, `SUMMARY_DLQ_BUFFER_MAX_BYTES` (JSONL append-only).
 - LLM generation: `LLM_MAX_TOKENS`, `LLM_TEMPERATURE`.
 - LLM fallback logging: `LLM_FALLBACK_LOG_EVERY` and counter `llm_fallbacks`.

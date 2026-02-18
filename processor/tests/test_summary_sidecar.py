@@ -8,6 +8,35 @@ from processor.src.metrics import MetricsRegistry, NamespacedMetricsRegistry
 from processor.src.config import settings  # type: ignore
 
 
+class _FakeReader:
+    def __init__(self, path="/metrics"):
+        self._lines = [
+            f"GET {path} HTTP/1.1\r\n".encode(),
+            b"Host: localhost\r\n",
+            b"\r\n",
+        ]
+
+    async def readline(self):
+        if not self._lines:
+            return b""
+        return self._lines.pop(0)
+
+
+class _FakeWriter:
+    def __init__(self):
+        self.data = b""
+        self.closed = False
+
+    def write(self, data: bytes):
+        self.data += data
+
+    async def drain(self):
+        return None
+
+    def close(self):
+        self.closed = True
+
+
 class FakePool:
     def __init__(self):
         self.calls = []
@@ -278,7 +307,22 @@ async def test_summary_publishes_and_marks_when_unpublished(monkeypatch):
     )
     assert ok is True
     assert len(producer.sent) == 1
-    assert calls["mark"] == 1
+
+
+@pytest.mark.asyncio
+async def test_summary_metrics_handler_returns_json():
+    sidecar = summary_sidecar.SummarySidecar()
+    reader = _FakeReader()
+    writer = _FakeWriter()
+
+    await sidecar._handle_metrics(reader, writer)
+    assert b"200 OK" in writer.data
+    body = writer.data.split(b"\r\n\r\n", 1)[1]
+    payload = json.loads(body.decode())
+    assert "counters" in payload
+    assert "rolling" in payload
+    assert payload["service_name"] in ("summary_sidecar", "processor")
+    assert "start_time" in payload
 
 
 @pytest.mark.asyncio

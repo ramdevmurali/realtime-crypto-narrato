@@ -9,6 +9,35 @@ from processor.src.services import sentiment_sidecar
 from processor.src.utils import simple_sentiment
 
 
+class _FakeReader:
+    def __init__(self, path="/metrics"):
+        self._lines = [
+            f"GET {path} HTTP/1.1\r\n".encode(),
+            b"Host: localhost\r\n",
+            b"\r\n",
+        ]
+
+    async def readline(self):
+        if not self._lines:
+            return b""
+        return self._lines.pop(0)
+
+
+class _FakeWriter:
+    def __init__(self):
+        self.data = b""
+        self.closed = False
+
+    def write(self, data: bytes):
+        self.data += data
+
+    async def drain(self):
+        return None
+
+    def close(self):
+        self.closed = True
+
+
 class FakePool:
     def __init__(self):
         self.calls = []
@@ -274,3 +303,19 @@ async def test_sentiment_dlq_failure_does_not_commit(monkeypatch):
     after = metrics.snapshot()["counters"].get("sentiment_dlq_failed", 0)
     assert after == 1
     assert len(consumer.commits) == 0
+
+
+@pytest.mark.asyncio
+async def test_sentiment_metrics_handler_returns_json():
+    sidecar = sentiment_sidecar.SentimentSidecar()
+    reader = _FakeReader()
+    writer = _FakeWriter()
+
+    await sidecar._handle_metrics(reader, writer)
+    assert b"200 OK" in writer.data
+    body = writer.data.split(b"\r\n\r\n", 1)[1]
+    payload = json.loads(body.decode())
+    assert "counters" in payload
+    assert "rolling" in payload
+    assert payload["service_name"] == "sentiment_sidecar"
+    assert "start_time" in payload

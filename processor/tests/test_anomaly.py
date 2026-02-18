@@ -268,3 +268,30 @@ async def test_check_anomalies_retries_publish_when_unpublished(monkeypatch):
     assert len(proc.producer.sent) == 2
     assert proc.alerts_emitted == 1
     assert calls["mark"] == 1
+
+
+@pytest.mark.asyncio
+async def test_check_anomalies_llm_offloaded(monkeypatch):
+    async def fake_insert_anomaly(*args, **kwargs):
+        return True
+
+    async def fake_mark(*args, **kwargs):
+        return None
+
+    def fake_llm(provider, api_key, symbol, window, ret, headline, sentiment):
+        return "llm summary"
+
+    monkeypatch.setattr(anomaly_service, "insert_anomaly", fake_insert_anomaly)
+    monkeypatch.setattr(anomaly_service, "mark_anomaly_alert_published", fake_mark)
+    monkeypatch.setattr(anomaly_service, "llm_summarize", fake_llm)
+    monkeypatch.setattr(settings, "anomaly_hotpath_stub_summary", False)
+    monkeypatch.setattr(settings, "llm_provider", "openai")
+    monkeypatch.setattr(settings, "openai_api_key", "test-key")
+
+    proc = FakeProcessor()
+    ts = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+    metrics = {"return_1m": settings.alert_threshold_1m + 0.01}
+
+    await anomaly_service.check_anomalies(proc, "btcusdt", ts, metrics)
+
+    assert len(proc.producer.sent) == 2

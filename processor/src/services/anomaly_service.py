@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import asyncio
 
 from ..config import settings, get_thresholds
 from ..domain.anomaly import AnomalyEvent, HeadlineContext, detect_anomalies
@@ -47,7 +48,16 @@ async def check_anomalies(processor: ProcessorState, symbol: str, ts: datetime, 
                 api_key = settings.openai_api_key
             elif settings.llm_provider == "google":
                 api_key = settings.google_api_key
-            summary = llm_summarize(settings.llm_provider, api_key, event.symbol, event.window, event.ret, event.headline, event.sentiment)
+            summary = await asyncio.to_thread(
+                llm_summarize,
+                settings.llm_provider,
+                api_key,
+                event.symbol,
+                event.window,
+                event.ret,
+                event.headline,
+                event.sentiment,
+            )
         event.summary_stub = summary
 
         event_id = f"{event.time.isoformat()}:{event.symbol}:{event.window}"

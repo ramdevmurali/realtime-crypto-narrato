@@ -25,7 +25,12 @@ async def process_price(proc: ProcessorState, symbol: str, price: float, ts) -> 
     if inserted:
         win = proc.price_windows[symbol]
         snapshot = win.snapshot()
-        _, metrics = compute_price_metrics(proc, symbol, price, ts)
+        try:
+            _, metrics = compute_price_metrics(proc, symbol, price, ts)
+        except Exception as exc:
+            win.restore(snapshot)
+            proc.log.error("metric_compute_failed", extra={"error": str(exc), "symbol": symbol})
+            raise PipelineError("compute_metrics", exc) from exc
         try:
             await persist_and_publish_price(proc, symbol, ts, metrics)
         except PipelineError:

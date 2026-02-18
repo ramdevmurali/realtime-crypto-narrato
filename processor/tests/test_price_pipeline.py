@@ -111,3 +111,35 @@ async def test_process_price_rolls_back_on_anomaly_failure(monkeypatch):
 
     assert win.buffer == snapshot
     assert win.z_ewma == {}
+
+
+@pytest.mark.asyncio
+async def test_process_price_rolls_back_on_compute_failure(monkeypatch):
+    proc = FakeProc()
+    ts = datetime(2026, 1, 1, 0, 0, tzinfo=timezone.utc)
+    win = proc.price_windows["btcusdt"]
+    win.add(ts - timedelta(seconds=30), 100.0)
+    snapshot = list(win.buffer)
+
+    async def fake_insert_price(*args, **kwargs):
+        return True
+
+    def fail_compute_metrics(*args, **kwargs):
+        raise RuntimeError("compute fail")
+
+    async def fail_insert_metric(*args, **kwargs):
+        raise AssertionError("insert_metric should not be called when compute fails")
+
+    async def fail_check_anomalies(*args, **kwargs):
+        raise AssertionError("check_anomalies should not be called when compute fails")
+
+    monkeypatch.setattr(price_pipeline, "insert_price", fake_insert_price)
+    monkeypatch.setattr(price_pipeline, "compute_metrics", fail_compute_metrics)
+    monkeypatch.setattr(price_pipeline, "insert_metric", fail_insert_metric)
+    monkeypatch.setattr(price_pipeline, "check_anomalies", fail_check_anomalies)
+
+    with pytest.raises(price_pipeline.PipelineError):
+        await price_pipeline.process_price(proc, "btcusdt", 110.0, ts)
+
+    assert win.buffer == snapshot
+    assert win.z_ewma == {}

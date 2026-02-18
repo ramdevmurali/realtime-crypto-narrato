@@ -1,3 +1,4 @@
+import hashlib
 import json
 import pytest
 from datetime import datetime, timezone
@@ -39,6 +40,15 @@ class FakeMsg:
 
     def __init__(self, payload):
         self.value = payload
+
+
+def _expected_event_id(payload: NewsMsg) -> str:
+    title_norm = (payload.title or "").strip().lower()
+    source_norm = (payload.source or "unknown").strip().lower()
+    url_norm = (payload.url or "").strip()
+    canonical = f"{payload.time}|{source_norm}|{title_norm}|{url_norm}"
+    digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:12]
+    return f"news:{source_norm}:{digest}"
 
 
 async def _run_sentiment_flow(messages, consumer, producer, pool):
@@ -94,7 +104,8 @@ async def test_sentiment_sidecar_enriches_and_publishes(monkeypatch):
     assert out["sentiment"] == 0.5
     assert out["label"] == "positive"
     assert out["confidence"] == 0.9
-    assert "event_id" in out
+    assert out["event_id"] == _expected_event_id(msg)
+    assert out["event_id"].startswith("news:rss:")
     assert len(consumer.commits) == 1
 
 

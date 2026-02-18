@@ -72,8 +72,8 @@ We may standardize internal model types further later, but the wire format is co
 
 Event ID formats (stable, for tracing/dedupe):
 - `summaries`/`alerts`: `event_id = "{time}:{symbol}:{window}"` (time is ISO 8601).
-- `news-enriched`: `event_id = "{time}:{title}:{url}"` (time ISO 8601; url may be null).
-Note: event_id is stable but not guaranteed globally unique if URL is missing.
+- `news-enriched`: `event_id = "news:{source}:{sha256(time|source|title|url)[:12]}"` (title lowercased/trimmed; url may be empty).
+Note: event_id is deterministic and collision‑resistant; intended for dedupe/trace.
 
 Sentiment fallback behavior: if the sentiment sidecar is down or errors, the raw `news` topic remains valid
 and carries the stub sentiment; consumers can continue using `news` until `news-enriched` is available.

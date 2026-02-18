@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 import time
 from typing import Iterable, List, Tuple
@@ -61,6 +62,15 @@ async def _upsert_headline(pool, payload: NewsMsg, sentiment: float):
 
 def _fallback_results(titles: List[str]) -> List[Tuple[float, None, None]]:
     return [(float(simple_sentiment(title)), None, None) for title in titles]
+
+
+def _news_event_id(payload: NewsMsg) -> str:
+    title_norm = (payload.title or "").strip().lower()
+    source_norm = (payload.source or "unknown").strip().lower()
+    url_norm = (payload.url or "").strip()
+    canonical = f"{payload.time}|{source_norm}|{title_norm}|{url_norm}"
+    digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:12]
+    return f"news:{source_norm}:{digest}"
 
 
 async def infer_sentiment_batch(messages: Iterable, consumer, producer, log, metrics: MetricsRegistry):
@@ -157,7 +167,7 @@ async def persist_and_publish_sentiment_batch(parsed, results, producer, pool, c
                 log=log,
                 op="upsert_headline",
             )
-            event_id = f"{payload.time}:{payload.title}:{payload.url}"
+            event_id = _news_event_id(payload)
             enriched = EnrichedNewsMsg(
                 event_id=event_id,
                 time=payload.time,

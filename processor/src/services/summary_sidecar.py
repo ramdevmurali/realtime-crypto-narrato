@@ -11,7 +11,7 @@ from ..logging_config import get_logger
 from ..runtime_interface import RuntimeService
 from ..metrics import get_metrics
 from ..io.db import init_pool, fetch_anomaly_alert_published, mark_anomaly_alert_published
-from ..utils import llm_summarize, with_retries, now_utc
+from ..utils import llm_summarize, with_retries, now_utc, parse_iso_datetime
 from ..io.models.messages import SummaryRequestMsg, AlertMsg
 from .sidecar_runtime import SidecarRuntime
 
@@ -192,7 +192,7 @@ async def compute_summary(payload, llm_provider: str, api_key: str | None, semap
         )
 
 
-async def persist_summary(payload, summary: str, pool, log):
+async def persist_summary(payload, summary: str, pool, log, ts):
     log.info("summary_request_received", extra=payload)
 
     # Upsert anomalies table with enriched summary
@@ -203,7 +203,7 @@ async def persist_summary(payload, summary: str, pool, log):
         ON CONFLICT (time, symbol, window_name) DO UPDATE
         SET summary = EXCLUDED.summary
         """,
-        payload["time"],
+        ts,
         payload["symbol"],
         payload["window"],
         payload.get("direction"),
@@ -246,6 +246,7 @@ async def process_summary_record(msg, consumer, producer, pool, log, semaphore: 
     try:
         payload = SummaryRequestMsg.model_validate_json(msg.value).model_dump()
         api_key = None
+        ts = parse_iso_datetime(payload["time"])
         if settings.llm_provider == "openai":
             api_key = settings.openai_api_key
         elif settings.llm_provider == "google":
@@ -267,12 +268,13 @@ async def process_summary_record(msg, consumer, producer, pool, log, semaphore: 
             summary,
             pool,
             log,
+            ts,
             log=log,
             op="persist_summary",
         )
         published = await with_retries(
             fetch_anomaly_alert_published,
-            payload["time"],
+            ts,
             payload["symbol"],
             payload["window"],
             log=log,
@@ -297,7 +299,7 @@ async def process_summary_record(msg, consumer, producer, pool, log, semaphore: 
         try:
             await with_retries(
                 mark_anomaly_alert_published,
-                payload["time"],
+                ts,
                 payload["symbol"],
                 payload["window"],
                 log=log,

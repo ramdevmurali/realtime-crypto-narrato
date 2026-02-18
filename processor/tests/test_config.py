@@ -37,3 +37,8 @@ def test_invalid_negative_values():
 def test_invalid_percentiles():
     with pytest.raises(ValidationError):
         Settings(return_percentile_low=0.9, return_percentile_high=0.1)
+
+
+def test_invalid_sentiment_poll_timeout():
+    with pytest.raises(ValidationError):
+        Settings(sentiment_poll_timeout_ms=0)

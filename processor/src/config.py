@@ -113,6 +113,7 @@ class Settings(BaseSettings):
     summary_poll_timeout_ms: int = 500
     summary_batch_max: int | None = None
     summary_llm_concurrency: int = 2
+    sentiment_poll_timeout_ms: int = 500
     task_restart_backoff_sec: float = 2.0
     task_restart_max_per_min: int = 10
 
@@ -170,6 +171,7 @@ class Settings(BaseSettings):
         "news_poll_interval_sec",
         "news_batch_limit",
         "summary_llm_concurrency",
+        "sentiment_poll_timeout_ms",
         "task_restart_backoff_sec",
         "task_restart_max_per_min",
         "summary_dlq_buffer_max_bytes",

@@ -284,7 +284,7 @@ class SentimentSidecar(SidecarRuntime, RuntimeService):
         try:
             while not self.should_stop():
                 msg_batch = await self._consumer.getmany(
-                    timeout_ms=settings.summary_poll_timeout_ms,
+                    timeout_ms=settings.sentiment_poll_timeout_ms,
                     max_records=settings.sentiment_batch_size,
                 )
                 messages = [msg for batch in msg_batch.values() for msg in batch]

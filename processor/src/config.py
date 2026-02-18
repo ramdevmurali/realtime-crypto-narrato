@@ -265,6 +265,9 @@ class Settings(BaseSettings):
             raise ValueError("window_labels_raw must be unique")
         for label in labels:
             _parse_window_label(label)
+        unsupported = set(labels) - {"1m", "5m", "15m"}
+        if unsupported:
+            raise ValueError(f"window_labels_raw contains unsupported labels: {sorted(unsupported)}")
         if not (0 < self.return_percentile_low < 1):
             raise ValueError("return_percentile_low must be in (0,1)")
         if not (0 < self.return_percentile_high < 1):

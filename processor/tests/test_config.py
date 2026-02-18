@@ -14,6 +14,11 @@ def test_invalid_window_labels_unit():
         Settings(window_labels_raw="5x")
 
 
+def test_invalid_window_labels_unsupported():
+    with pytest.raises(ValidationError):
+        Settings(window_labels_raw="2m,5m")
+
+
 def test_invalid_llm_provider():
     with pytest.raises(ValidationError):
         Settings(llm_provider="other")

@@ -26,7 +26,7 @@ async def _commit_message(consumer, msg, log):
         log.warning("news_commit_failed", extra={"error": str(exc), "offset": msg.offset})
 
 
-async def _send_dlq(producer, payload: bytes, log, offset: int | None = None) -> bool:
+async def _send_dlq(producer, payload: bytes, log, metrics: MetricsRegistry, offset: int | None = None) -> bool:
     try:
         await with_retries(
             producer.send_and_wait,
@@ -37,7 +37,6 @@ async def _send_dlq(producer, payload: bytes, log, offset: int | None = None) ->
         )
         return True
     except Exception as exc:
-        metrics = get_metrics()
         metrics.inc("sentiment_dlq_failed")
         log.error("news_dlq_failed", extra={"error": str(exc), "offset": offset})
         return False
@@ -72,7 +71,7 @@ async def infer_sentiment_batch(messages: Iterable, consumer, producer, log, met
             log.warning("news_message_decode_failed", extra={"error": str(exc)})
             metrics.inc("sentiment_errors")
             metrics.inc("sentiment_dlq")
-            dlq_ok = await _send_dlq(producer, msg.value, log, offset=msg.offset)
+            dlq_ok = await _send_dlq(producer, msg.value, log, metrics, offset=msg.offset)
             if dlq_ok:
                 await _commit_message(consumer, msg, log)
             continue
@@ -178,7 +177,7 @@ async def persist_and_publish_sentiment_batch(parsed, results, producer, pool, c
             log.warning("sentiment_handle_failed", extra={"error": str(exc)})
             metrics.inc("sentiment_errors")
             metrics.inc("sentiment_dlq")
-            dlq_ok = await _send_dlq(producer, msg.value, log, offset=msg.offset)
+            dlq_ok = await _send_dlq(producer, msg.value, log, metrics, offset=msg.offset)
             if dlq_ok:
                 await _commit_message(consumer, msg, log)
 

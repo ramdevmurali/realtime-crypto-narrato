@@ -6,7 +6,6 @@ from processor.src.config import settings
 from processor.src.io.models.messages import NewsMsg
 from processor.src.services import sentiment_sidecar
 from processor.src.utils import simple_sentiment
-from processor.src.metrics import get_metrics
 
 
 class FakePool:
@@ -251,9 +250,6 @@ async def test_sentiment_dlq_failure_does_not_commit(monkeypatch):
     monkeypatch.setattr(sentiment_sidecar, "with_retries", no_retry)
     monkeypatch.setattr(producer, "send_and_wait", fail_send)
 
-    metrics = get_metrics()
-    before = metrics.snapshot()["counters"].get("sentiment_dlq_failed", 0)
-
     msg = NewsMsg(
         time=datetime(2026, 2, 1, 0, 0, tzinfo=timezone.utc),
         title="headline",
@@ -261,8 +257,8 @@ async def test_sentiment_dlq_failure_does_not_commit(monkeypatch):
         source="rss",
         sentiment=0.0,
     )
-    await _run_sentiment_flow([FakeMsg(msg.to_bytes())], consumer, producer, pool)
+    _fallback_used, metrics = await _run_sentiment_flow([FakeMsg(msg.to_bytes())], consumer, producer, pool)
 
     after = metrics.snapshot()["counters"].get("sentiment_dlq_failed", 0)
-    assert after == before + 1
+    assert after == 1
     assert len(consumer.commits) == 0

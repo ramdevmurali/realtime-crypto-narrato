@@ -13,7 +13,8 @@ import pytest_asyncio
 from aiokafka import AIOKafkaProducer
 
 from processor.src import config as config_module
-from processor.src.io.db import init_tables, close_pool, init_pool
+from processor.src.io.db import close_pool, init_pool
+from scripts import migrate_db
 
 
 def _compose_file() -> Path:
@@ -71,7 +72,7 @@ async def integration_services():
     await _wait_for_db(db_url)
     await _wait_for_kafka(brokers)
     await init_pool()
-    await init_tables()
+    await migrate_db.migrate()
     await close_pool()
     yield
 

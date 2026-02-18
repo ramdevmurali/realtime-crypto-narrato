@@ -111,6 +111,8 @@ Replay buffered summary requests (if summary DLQ send failed):
 KAFKA_BROKERS_RAW=localhost:9092 \
 PYTHONPATH=processor/src:. .venv/bin/python scripts/replay_summary_dlq.py --path summary_dlq_buffer.jsonl
 ```
+Note: default replays to `summaries` (may re‑LLM). To avoid re‑LLM, replay to DLQ:
+`--topic summaries-deadletter`.
 
 SSE stream for headlines (rudimentary sentiment):
 ```

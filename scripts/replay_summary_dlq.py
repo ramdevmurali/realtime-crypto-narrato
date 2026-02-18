@@ -10,7 +10,7 @@ from aiokafka import AIOKafkaProducer
 from processor.src.config import settings
 
 
-async def publish_buffer(path: Path, sleep_ms: int) -> int:
+async def publish_buffer(path: Path, sleep_ms: int, topic: str) -> int:
     if not path.exists():
         print(f"buffer file not found: {path}")
         return 0
@@ -29,7 +29,7 @@ async def publish_buffer(path: Path, sleep_ms: int) -> int:
                 if not payload_b64:
                     continue
                 payload = base64.b64decode(payload_b64)
-                await producer.send_and_wait(settings.summaries_topic, payload)
+                await producer.send_and_wait(topic, payload)
                 sent += 1
                 if sleep_ms > 0:
                     await asyncio.sleep(sleep_ms / 1000)
@@ -46,10 +46,15 @@ async def main() -> None:
         help="Path to summary DLQ buffer JSONL file",
     )
     parser.add_argument("--sleep-ms", type=int, default=0, help="Sleep between messages (ms)")
+    parser.add_argument(
+        "--topic",
+        default=settings.summaries_topic,
+        help="Kafka topic to replay to (default: summaries)",
+    )
     args = parser.parse_args()
 
-    sent = await publish_buffer(Path(args.path), args.sleep_ms)
-    print(f"replayed {sent} summary requests to {settings.summaries_topic}")
+    sent = await publish_buffer(Path(args.path), args.sleep_ms, args.topic)
+    print(f"replayed {sent} summary requests to {args.topic}")
 
 
 if __name__ == "__main__":

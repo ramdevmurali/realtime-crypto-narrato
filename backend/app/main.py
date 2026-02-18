@@ -109,6 +109,50 @@ async def stream_headlines(
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
+async def _alerts_event_generator(limit: int, interval: float):
+    backoff = 1.0
+    while True:
+        try:
+            rows = await db.fetch_alerts(limit)
+            payload = {
+                "items": [
+                    {
+                        "time": r["time"].isoformat()
+                        if hasattr(r["time"], "isoformat")
+                        else str(r["time"]),
+                        "symbol": r["symbol"],
+                        "window": r["window"],
+                        "direction": r["direction"],
+                        "return": r["return"],
+                        "threshold": r["threshold"],
+                        "summary": r["summary"],
+                        "headline": r["headline"],
+                        "sentiment": r["sentiment"],
+                    }
+                    for r in rows
+                ],
+                "count": len(rows),
+            }
+            yield f"data: {json.dumps(payload)}\n\n"
+            backoff = 1.0
+            await asyncio.sleep(interval)
+        except asyncio.CancelledError:
+            logger.info("alerts_stream_cancelled")
+            break
+        except Exception as exc:
+            logger.warning("alerts_stream_error: %s", exc)
+            await asyncio.sleep(backoff)
+            backoff = min(backoff * 2.0, 30.0)
+
+
+@app.get("/alerts/stream")
+async def stream_alerts(
+    limit: int = Query(5, ge=1, le=50),
+    interval: float = Query(2.0, ge=0.5),
+):
+    return StreamingResponse(_alerts_event_generator(limit, interval), media_type="text/event-stream")
+
+
 @app.get("/alerts")
 async def get_alerts(limit: int = Query(20, ge=1, le=200)):
     rows = await db.fetch_alerts(limit)

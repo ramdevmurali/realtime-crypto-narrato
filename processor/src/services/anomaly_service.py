@@ -4,7 +4,7 @@ from datetime import datetime
 
 from ..config import settings, get_thresholds
 from ..domain.anomaly import AnomalyEvent, HeadlineContext, detect_anomalies
-from ..io.db import insert_anomaly
+from ..io.db import insert_anomaly, fetch_anomaly_alert_published, mark_anomaly_alert_published
 from ..utils import llm_summarize, with_retries
 from ..logging_config import get_logger
 from ..io.models.messages import SummaryRequestMsg, AlertMsg
@@ -66,8 +66,18 @@ async def check_anomalies(processor: ProcessorState, symbol: str, ts: datetime, 
             op="insert_anomaly",
         )
         if not inserted:
-            log.info("anomaly_duplicate_skipped", extra={"event_id": event_id})
-            continue
+            published = await with_retries(
+                fetch_anomaly_alert_published,
+                event.time,
+                event.symbol,
+                event.window,
+                log=log,
+                op="fetch_anomaly_alert_published",
+            )
+            if published:
+                log.info("anomaly_duplicate_skipped", extra={"event_id": event_id})
+                continue
+            log.info("anomaly_publish_retry", extra={"event_id": event_id})
 
         summary_req = SummaryRequestMsg(
             event_id=event_id,
@@ -108,6 +118,17 @@ async def check_anomalies(processor: ProcessorState, symbol: str, ts: datetime, 
             log=log,
             op="send_alert",
         )
+        try:
+            await with_retries(
+                mark_anomaly_alert_published,
+                event.time,
+                event.symbol,
+                event.window,
+                log=log,
+                op="mark_anomaly_alert_published",
+            )
+        except Exception as exc:
+            log.warning("anomaly_publish_mark_failed", extra={"event_id": event_id, "error": str(exc)})
         processor.record_alert(event.symbol, event.window, event.time)
         log.info(
             "alert_emitted",

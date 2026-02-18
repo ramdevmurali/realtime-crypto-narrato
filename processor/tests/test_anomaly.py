@@ -28,6 +28,10 @@ class FakeProcessor:
         self.alerts_emitted += 1
 
 
+async def _noop(*args, **kwargs):
+    return None
+
+
 @pytest.mark.asyncio
 async def test_check_anomalies_triggers_and_updates_state(monkeypatch):
     calls = []
@@ -37,6 +41,7 @@ async def test_check_anomalies_triggers_and_updates_state(monkeypatch):
         return True
 
     monkeypatch.setattr(anomaly_service, "insert_anomaly", fake_insert_anomaly)
+    monkeypatch.setattr(anomaly_service, "mark_anomaly_alert_published", _noop)
 
     proc = FakeProcessor()
     ts = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
@@ -64,6 +69,7 @@ async def test_check_anomalies_below_threshold_no_alert(monkeypatch):
         return True
 
     monkeypatch.setattr(anomaly_service, "insert_anomaly", fake_insert_anomaly)
+    monkeypatch.setattr(anomaly_service, "mark_anomaly_alert_published", _noop)
 
     proc = FakeProcessor()
     ts = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
@@ -85,6 +91,7 @@ async def test_check_anomalies_respects_rate_limit(monkeypatch):
         return True
 
     monkeypatch.setattr(anomaly_service, "insert_anomaly", fake_insert_anomaly)
+    monkeypatch.setattr(anomaly_service, "mark_anomaly_alert_published", _noop)
 
     proc = FakeProcessor()
     ts = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
@@ -108,6 +115,7 @@ async def test_check_anomalies_direction_up_down(monkeypatch):
         return True
 
     monkeypatch.setattr(anomaly_service, "insert_anomaly", fake_insert_anomaly)
+    monkeypatch.setattr(anomaly_service, "mark_anomaly_alert_published", _noop)
 
     proc = FakeProcessor()
     ts = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
@@ -136,6 +144,7 @@ async def test_check_anomalies_includes_latest_headline_and_sentiment(monkeypatc
         return True
 
     monkeypatch.setattr(anomaly_service, "insert_anomaly", fake_insert_anomaly)
+    monkeypatch.setattr(anomaly_service, "mark_anomaly_alert_published", _noop)
 
     proc = FakeProcessor()
     ts = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
@@ -159,6 +168,7 @@ async def test_check_anomalies_omits_stale_headline(monkeypatch):
         return True
 
     monkeypatch.setattr(anomaly_service, "insert_anomaly", fake_insert_anomaly)
+    monkeypatch.setattr(anomaly_service, "mark_anomaly_alert_published", _noop)
 
     proc = FakeProcessor()
     ts = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
@@ -181,6 +191,7 @@ async def test_check_anomalies_no_metrics_no_alert(monkeypatch):
         return True
 
     monkeypatch.setattr(anomaly_service, "insert_anomaly", fake_insert_anomaly)
+    monkeypatch.setattr(anomaly_service, "mark_anomaly_alert_published", _noop)
 
     proc = FakeProcessor()
     ts = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
@@ -197,7 +208,12 @@ async def test_check_anomalies_skips_duplicate_inserts(monkeypatch):
     async def fake_insert_anomaly(*args, **kwargs):
         return False
 
+    async def fake_fetch_published(*args, **kwargs):
+        return True
+
     monkeypatch.setattr(anomaly_service, "insert_anomaly", fake_insert_anomaly)
+    monkeypatch.setattr(anomaly_service, "fetch_anomaly_alert_published", fake_fetch_published)
+    monkeypatch.setattr(anomaly_service, "mark_anomaly_alert_published", _noop)
 
     proc = FakeProcessor()
     ts = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
@@ -207,3 +223,48 @@ async def test_check_anomalies_skips_duplicate_inserts(monkeypatch):
 
     assert len(proc.producer.sent) == 0
     assert proc.last_alert == {}
+
+
+@pytest.mark.asyncio
+async def test_check_anomalies_retries_publish_when_unpublished(monkeypatch):
+    calls = {"insert": 0, "mark": 0}
+
+    async def fake_insert_anomaly(*args, **kwargs):
+        calls["insert"] += 1
+        return calls["insert"] == 1
+
+    async def fake_fetch_published(*args, **kwargs):
+        return False
+
+    async def fake_mark(*args, **kwargs):
+        calls["mark"] += 1
+
+    class FlakyProducer(FakeProducer):
+        def __init__(self):
+            super().__init__()
+            self.fail_next = True
+
+        async def send_and_wait(self, topic, payload):
+            if self.fail_next:
+                self.fail_next = False
+                raise RuntimeError("send fail")
+            await super().send_and_wait(topic, payload)
+
+    monkeypatch.setattr(anomaly_service, "insert_anomaly", fake_insert_anomaly)
+    monkeypatch.setattr(anomaly_service, "fetch_anomaly_alert_published", fake_fetch_published)
+    monkeypatch.setattr(anomaly_service, "mark_anomaly_alert_published", fake_mark)
+    monkeypatch.setattr(settings, "retry_max_attempts", 1)
+
+    proc = FakeProcessor()
+    proc.producer = FlakyProducer()
+    ts = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+    metrics = {"return_1m": settings.alert_threshold_1m + 0.01}
+
+    with pytest.raises(Exception):
+        await anomaly_service.check_anomalies(proc, "btcusdt", ts, metrics)
+
+    await anomaly_service.check_anomalies(proc, "btcusdt", ts, metrics)
+
+    assert len(proc.producer.sent) == 2
+    assert proc.alerts_emitted == 1
+    assert calls["mark"] == 1

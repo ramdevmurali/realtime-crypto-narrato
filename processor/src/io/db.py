@@ -116,9 +116,13 @@ async def init_tables():
                     headline TEXT,
                     sentiment DOUBLE PRECISION,
                     summary TEXT,
+                    alert_published BOOLEAN DEFAULT TRUE,
                     PRIMARY KEY (time, symbol, window_name)
                 );
                 """
+            )
+            await conn.execute(
+                "ALTER TABLE anomalies ADD COLUMN IF NOT EXISTS alert_published BOOLEAN DEFAULT TRUE;"
             )
             await conn.execute("SELECT create_hypertable('anomalies','time', if_not_exists => TRUE);")
             await conn.execute("CREATE INDEX IF NOT EXISTS idx_anomalies_symbol_time_desc ON anomalies(symbol, time DESC);")
@@ -239,8 +243,10 @@ async def insert_anomaly(time, symbol, window, direction, ret, threshold, headli
     async with pool.acquire() as conn:
         row = await conn.fetchval(
             """
-            INSERT INTO anomalies(time, symbol, window_name, direction, return_value, threshold, headline, sentiment, summary)
-            VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)
+            INSERT INTO anomalies(
+                time, symbol, window_name, direction, return_value, threshold, headline, sentiment, summary, alert_published
+            )
+            VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
             ON CONFLICT DO NOTHING
             RETURNING 1
             """,
@@ -253,8 +259,38 @@ async def insert_anomaly(time, symbol, window, direction, ret, threshold, headli
             headline,
             sentiment,
             summary,
+            False,
         )
         return row is not None
+
+
+async def fetch_anomaly_alert_published(time, symbol, window) -> bool | None:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        return await conn.fetchval(
+            """
+            SELECT alert_published FROM anomalies
+            WHERE time = $1 AND symbol = $2 AND window_name = $3
+            """,
+            time,
+            symbol,
+            window,
+        )
+
+
+async def mark_anomaly_alert_published(time, symbol, window) -> None:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            UPDATE anomalies
+            SET alert_published = TRUE
+            WHERE time = $1 AND symbol = $2 AND window_name = $3
+            """,
+            time,
+            symbol,
+            window,
+        )
 
 
 async def close_pool():

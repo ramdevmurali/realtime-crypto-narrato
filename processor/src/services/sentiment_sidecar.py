@@ -156,7 +156,9 @@ async def persist_and_publish_sentiment_batch(parsed, results, producer, pool, c
                 log=log,
                 op="upsert_headline",
             )
+            event_id = f"{payload.time.isoformat()}:{payload.title}:{payload.url}"
             enriched = EnrichedNewsMsg(
+                event_id=event_id,
                 time=payload.time,
                 title=payload.title,
                 url=payload.url,

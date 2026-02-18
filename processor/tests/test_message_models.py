@@ -23,6 +23,7 @@ def test_news_msg_valid():
 
 def test_enriched_news_msg_valid():
     msg = EnrichedNewsMsg(
+        event_id="2026-02-01T00:00:00+00:00:headline:http://x",
         time=datetime(2026, 2, 1, 0, 0, tzinfo=timezone.utc),
         title="headline",
         url="http://x",
@@ -42,6 +43,7 @@ def test_enriched_news_msg_optional_fields():
         source="rss",
         sentiment=-0.2,
     )
+    assert msg.event_id is None
     assert msg.label is None
     assert msg.confidence is None
 

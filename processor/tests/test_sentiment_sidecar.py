@@ -94,6 +94,7 @@ async def test_sentiment_sidecar_enriches_and_publishes(monkeypatch):
     assert out["sentiment"] == 0.5
     assert out["label"] == "positive"
     assert out["confidence"] == 0.9
+    assert "event_id" in out
     assert len(consumer.commits) == 1
 
 

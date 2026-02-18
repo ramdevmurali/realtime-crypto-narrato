@@ -24,6 +24,7 @@ class NewsMsg(BaseModel):
 
 
 class EnrichedNewsMsg(BaseModel):
+    event_id: Optional[str] = None
     time: AwareDatetime
     title: str
     url: Optional[str] = None

@@ -63,7 +63,7 @@ Canonical payload models live in `processor/src/io/models/messages.py`.
   - Note: this topic carries **summary requests**, not completed summaries.
 - `alerts`: `time`, `symbol`, `window`, `direction`, `ret`, `threshold`, `summary` (optional: `headline`, `sentiment`)
   - Note: `window` in Kafka payloads maps to `window_name` in the `anomalies` table.
-- `news-enriched`: same as `news` plus optional `label`, `confidence` (sentiment sidecar output)
+- `news-enriched`: same as `news` plus optional `label`, `confidence`, and `event_id` (sentiment sidecar output)
 - `news-deadletter`: raw news messages that failed enrichment (poison-pill avoidance)
 
 Sentiment fallback behavior: if the sentiment sidecar is down or errors, the raw `news` topic remains valid

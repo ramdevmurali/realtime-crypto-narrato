@@ -65,6 +65,7 @@ async def consume_prices(proc: ProcessorState) -> None:
         try:
             await process_price(proc, data["symbol"], data["price"], data["ts"])
         except PipelineError:
+            get_metrics("processor").inc("price_pipeline_failed")
             get_metrics("processor").inc("price_dlq_sent")
             ok = await proc.send_price_dlq(data["raw"])
             if ok:
@@ -77,6 +78,7 @@ async def consume_prices(proc: ProcessorState) -> None:
         except Exception as exc:
             log = getattr(proc, "log", get_logger(__name__))
             log.error("price_pipeline_failed", extra={"error": str(exc), "symbol": data["symbol"]})
+            get_metrics("processor").inc("price_pipeline_failed")
             get_metrics("processor").inc("price_dlq_sent")
             ok = await proc.send_price_dlq(data["raw"])
             if ok:

@@ -70,6 +70,11 @@ Timestamp consistency: all Kafka payload `time` fields are ISO 8601 strings (e.g
 Downstream consumers should parse all `time` fields as ISO 8601 strings.
 We may standardize internal model types further later, but the wire format is consistent.
 
+Event ID formats (stable, for tracing/dedupe):
+- `summaries`/`alerts`: `event_id = "{time}:{symbol}:{window}"` (time is ISO 8601).
+- `news-enriched`: `event_id = "{time}:{title}:{url}"` (time ISO 8601; url may be null).
+Note: event_id is stable but not guaranteed globally unique if URL is missing.
+
 Sentiment fallback behavior: if the sentiment sidecar is down or errors, the raw `news` topic remains valid
 and carries the stub sentiment; consumers can continue using `news` until `news-enriched` is available.
 

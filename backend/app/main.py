@@ -78,7 +78,7 @@ async def get_headlines(
     rows = await db.fetch_headlines(limit, since=since_dt)
     return [
         {
-            "time": r["time"],
+            "time": r["time"].isoformat() if hasattr(r["time"], "isoformat") else str(r["time"]),
             "title": r["title"],
             "url": r["url"],
             "source": r["source"],
@@ -180,7 +180,7 @@ async def get_alerts(
     rows = await db.fetch_alerts(limit, since=since_dt)
     return [
         {
-            "time": r["time"],
+            "time": r["time"].isoformat() if hasattr(r["time"], "isoformat") else str(r["time"]),
             "symbol": r["symbol"],
             "window": r["window"],
             "direction": r["direction"],

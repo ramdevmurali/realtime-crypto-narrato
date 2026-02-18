@@ -3,6 +3,7 @@ from ..io.models.messages import PriceMsg
 from .price_pipeline import process_price, PipelineError
 from ..logging_config import get_logger
 from ..processor_state import ProcessorState
+from ..utils import parse_iso_datetime
 
 
 def handle_price_message(proc: ProcessorState, msg) -> tuple[str, dict]:
@@ -23,7 +24,7 @@ def handle_price_message(proc: ProcessorState, msg) -> tuple[str, dict]:
 
     symbol = price_msg.symbol
     price = float(price_msg.price)
-    ts = price_msg.time
+    ts = parse_iso_datetime(price_msg.time)
     if proc.should_drop_late(symbol, ts):
         last_ts = proc.last_price_ts.get(symbol)
         if proc.late_price_messages == 1 or proc.late_price_messages % proc.late_price_log_every == 0:

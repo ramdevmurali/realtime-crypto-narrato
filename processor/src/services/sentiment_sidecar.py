@@ -10,7 +10,7 @@ from ..config import settings
 from ..logging_config import get_logger
 from ..runtime_interface import RuntimeService
 from ..io.db import init_pool
-from ..utils import simple_sentiment, with_retries, now_utc
+from ..utils import simple_sentiment, with_retries, now_utc, parse_iso_datetime
 from ..io.models.messages import NewsMsg, EnrichedNewsMsg
 from ..metrics import MetricsRegistry, get_metrics
 from . import sentiment_model
@@ -43,6 +43,7 @@ async def _send_dlq(producer, payload: bytes, log, metrics: MetricsRegistry, off
 
 
 async def _upsert_headline(pool, payload: NewsMsg, sentiment: float):
+    ts = parse_iso_datetime(payload.time)
     await pool.execute(
         """
         INSERT INTO headlines (time, title, source, url, sentiment)
@@ -50,7 +51,7 @@ async def _upsert_headline(pool, payload: NewsMsg, sentiment: float):
         ON CONFLICT (time, title) DO UPDATE
         SET sentiment = EXCLUDED.sentiment
         """,
-        payload.time,
+        ts,
         payload.title,
         payload.source,
         payload.url,
@@ -83,7 +84,7 @@ async def infer_sentiment_batch(messages: Iterable, consumer, producer, log, met
     metrics.inc("sentiment_batches")
     titles = [payload.title for _, payload in parsed]
     now = now_utc()
-    lag_values = [max(0.0, (now - payload.time).total_seconds() * 1000) for _, payload in parsed]
+    lag_values = [max(0.0, (now - parse_iso_datetime(payload.time)).total_seconds() * 1000) for _, payload in parsed]
     queue_lag_ms = max(lag_values) if lag_values else 0.0
     if settings.sentiment_batch_size and len(parsed) >= settings.sentiment_batch_size:
         log.warning("sentiment_batch_maxed", extra={"batch_size": len(parsed), "queue_lag_ms": queue_lag_ms})
@@ -156,7 +157,7 @@ async def persist_and_publish_sentiment_batch(parsed, results, producer, pool, c
                 log=log,
                 op="upsert_headline",
             )
-            event_id = f"{payload.time.isoformat()}:{payload.title}:{payload.url}"
+            event_id = f"{payload.time}:{payload.title}:{payload.url}"
             enriched = EnrichedNewsMsg(
                 event_id=event_id,
                 time=payload.time,

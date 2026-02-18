@@ -52,7 +52,9 @@ def build_news_msg(
     url = entry.get('link')
     source = entry.get('source', {}).get('title') if entry.get('source') else settings.rss_default_source
     sentiment = simple_sentiment(title)
-    msg = NewsMsg(time=ts, title=title, url=url, source=source, sentiment=sentiment)
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    msg = NewsMsg(time=ts.isoformat(), title=title, url=url, source=source, sentiment=sentiment)
     return True, msg, uid
 
 
@@ -113,7 +115,9 @@ async def price_ingest_task(processor: ProcessorState):
                             ts = now_utc()
                     else:
                         ts = now_utc()
-                    msg = PriceMsg(symbol=symbol, price=price, time=ts)
+                    if ts.tzinfo is None:
+                        ts = ts.replace(tzinfo=timezone.utc)
+                    msg = PriceMsg(symbol=symbol, price=price, time=ts.isoformat())
                     await with_retries(processor.producer.send_and_wait, settings.price_topic, msg.to_bytes(), log=log, op="send_price")
                     log.info("price_published", extra={"symbol": symbol, "price": price})
                     price_messages_sent += 1

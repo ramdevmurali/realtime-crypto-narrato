@@ -8,6 +8,8 @@ from processor.src.io.models.messages import PriceMsg, NewsMsg, EnrichedNewsMsg,
 def test_price_msg_valid():
     msg = PriceMsg(symbol="btcusdt", price=100.5, time=datetime(2026, 2, 1, 0, 0, tzinfo=timezone.utc))
     assert msg.symbol == "btcusdt"
+    assert isinstance(msg.time, str)
+    assert msg.time.endswith("+00:00")
 
 
 def test_news_msg_valid():
@@ -19,6 +21,8 @@ def test_news_msg_valid():
         sentiment=0.1,
     )
     assert msg.title == "headline"
+    assert isinstance(msg.time, str)
+    assert msg.time.endswith("+00:00")
 
 
 def test_enriched_news_msg_valid():
@@ -113,6 +117,7 @@ def test_to_bytes_round_trip():
     parsed = PriceMsg.model_validate(payload)
     assert parsed.symbol == "ethusdt"
     assert parsed.price == 200.0
+    assert parsed.time == msg.time
 
 
 def test_optional_fields_allowed():

@@ -66,6 +66,10 @@ Canonical payload models live in `processor/src/io/models/messages.py`.
 - `news-enriched`: same as `news` plus optional `label`, `confidence`, and `event_id` (sentiment sidecar output)
 - `news-deadletter`: raw news messages that failed enrichment (poison-pill avoidance)
 
+Timestamp consistency: all Kafka payload `time` fields are ISO 8601 strings (e.g., `2026-02-01T00:00:00+00:00`).
+Downstream consumers should parse all `time` fields as ISO 8601 strings.
+We may standardize internal model types further later, but the wire format is consistent.
+
 Sentiment fallback behavior: if the sentiment sidecar is down or errors, the raw `news` topic remains valid
 and carries the stub sentiment; consumers can continue using `news` until `news-enriched` is available.
 

@@ -7,6 +7,7 @@ from ..domain.metrics import compute_metrics
 from ..services.anomaly_service import check_anomalies
 from ..utils import with_retries
 from ..processor_state import ProcessorState
+from ..metrics import get_metrics
 
 
 @dataclass
@@ -20,6 +21,7 @@ async def process_price(proc: ProcessorState, symbol: str, price: float, ts) -> 
         inserted = await with_retries(insert_price, ts, symbol, price, log=proc.log, op="insert_price")
     except Exception as exc:
         proc.log.error("price_insert_failed", extra={"error": str(exc), "symbol": symbol})
+        get_metrics("processor").inc("price_insert_failed")
         raise PipelineError("insert_price", exc) from exc
 
     if inserted:
@@ -30,6 +32,7 @@ async def process_price(proc: ProcessorState, symbol: str, price: float, ts) -> 
         except Exception as exc:
             win.restore(snapshot)
             proc.log.error("metric_compute_failed", extra={"error": str(exc), "symbol": symbol})
+            get_metrics("processor").inc("metric_compute_failed")
             raise PipelineError("compute_metrics", exc) from exc
         try:
             await persist_and_publish_price(proc, symbol, ts, metrics)
@@ -53,9 +56,11 @@ async def persist_and_publish_price(proc: ProcessorState, symbol: str, ts, metri
             await with_retries(insert_metric, ts, symbol, metrics, log=proc.log, op="insert_metric")
         except Exception as exc:
             proc.log.error("metric_insert_failed", extra={"error": str(exc), "symbol": symbol})
+            get_metrics("processor").inc("metric_insert_failed")
             raise PipelineError("insert_metric", exc) from exc
     try:
         await check_anomalies(proc, symbol, ts, metrics or {})
     except Exception as exc:
         proc.log.error("anomaly_check_failed", extra={"error": str(exc), "symbol": symbol})
+        get_metrics("processor").inc("anomaly_check_failed")
         raise PipelineError("check_anomalies", exc) from exc

@@ -4,6 +4,7 @@ from .price_pipeline import process_price, PipelineError
 from ..logging_config import get_logger
 from ..processor_state import ProcessorState
 from ..utils import parse_iso_datetime
+from ..metrics import get_metrics
 
 
 def handle_price_message(proc: ProcessorState, msg) -> tuple[str, dict]:
@@ -48,10 +49,12 @@ async def consume_prices(proc: ProcessorState) -> None:
     async for msg in proc.consumer:
         action, data = handle_price_message(proc, msg)
         if action == "dlq":
+            get_metrics("processor").inc("price_dlq_sent")
             ok = await proc.send_price_dlq(data["payload"])
             if ok:
                 await proc.commit_msg(msg)
             else:
+                get_metrics("processor").inc("price_dlq_send_failed")
                 log = getattr(proc, "log", get_logger(__name__))
                 log.warning("price_dlq_commit_skipped", extra={"offset": msg.offset})
             continue
@@ -62,20 +65,24 @@ async def consume_prices(proc: ProcessorState) -> None:
         try:
             await process_price(proc, data["symbol"], data["price"], data["ts"])
         except PipelineError:
+            get_metrics("processor").inc("price_dlq_sent")
             ok = await proc.send_price_dlq(data["raw"])
             if ok:
                 await proc.commit_msg(msg)
             else:
+                get_metrics("processor").inc("price_dlq_send_failed")
                 log = getattr(proc, "log", get_logger(__name__))
                 log.warning("price_dlq_commit_skipped", extra={"offset": msg.offset})
             continue
         except Exception as exc:
             log = getattr(proc, "log", get_logger(__name__))
             log.error("price_pipeline_failed", extra={"error": str(exc), "symbol": data["symbol"]})
+            get_metrics("processor").inc("price_dlq_sent")
             ok = await proc.send_price_dlq(data["raw"])
             if ok:
                 await proc.commit_msg(msg)
             else:
+                get_metrics("processor").inc("price_dlq_send_failed")
                 log.warning("price_dlq_commit_skipped", extra={"offset": msg.offset})
             continue
 

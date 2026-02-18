@@ -167,6 +167,8 @@ curl -N 'http://localhost:8000/headlines/stream?limit=5&interval=2'
   inference and queue lag plus counters (`sentiment_batches`, `sentiment_fallbacks`,
   `sentiment_dlq`, `sentiment_errors`).
   These are **telemetry metrics** (operational counters), not the price metrics stored in the `metrics` table.
+- Ingest telemetry counters: `price_ingest_failures`, `price_ingest_retries`,
+  `news_ingest_failures`, `news_ingest_retries`.
 - Light runtime: set `SENTIMENT_LIGHT_RUNTIME=true` to use `tokenizers` directly
   and avoid importing `transformers` (useful for slimmer images).
   For Docker builds, set `SENTIMENT_LIGHT_RUNTIME=true` so the image installs

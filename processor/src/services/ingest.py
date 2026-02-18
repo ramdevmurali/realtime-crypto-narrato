@@ -10,6 +10,7 @@ from ..config import settings
 from ..io.db import insert_headline
 from ..utils import now_utc, simple_sentiment, sleep_backoff, with_retries
 from ..logging_config import get_logger
+from ..metrics import get_metrics
 from ..io.models.messages import PriceMsg, NewsMsg
 from ..processor_state import ProcessorState
 
@@ -93,6 +94,7 @@ async def price_ingest_task(processor: ProcessorState):
     attempt = 0
     failures = 0
     price_messages_sent = 0
+    metrics = get_metrics()
     while True:
         try:
             async with websockets.connect(url) as ws:
@@ -121,6 +123,8 @@ async def price_ingest_task(processor: ProcessorState):
             log.info("price_ingest_cancelled")
             break
         except Exception as exc:
+            metrics.inc("price_ingest_failures")
+            metrics.inc("price_ingest_retries")
             log.warning("price_ws_error", extra={"error": str(exc), "attempt": attempt, "failures": failures})
             backoff_base = settings.price_backoff_base_after_failures_sec if failures >= settings.price_backoff_failures_threshold else settings.price_backoff_base_sec
             await sleep_backoff(attempt, base=backoff_base, cap=settings.price_backoff_cap_sec)
@@ -131,7 +135,13 @@ async def price_ingest_task(processor: ProcessorState):
             if failures % settings.ingest_stuck_log_every == 0:
                 log.warning(
                     "ingest_stuck",
-                    extra={"component": "price", "failures": failures, "attempt": attempt},
+                    extra={
+                        "component": "price",
+                        "failures": failures,
+                        "attempt": attempt,
+                        "backoff_base": backoff_base,
+                        "backoff_cap": settings.price_backoff_cap_sec,
+                    },
                 )
 
 
@@ -145,6 +155,7 @@ async def news_ingest_task(processor: ProcessorState):
     attempt = 0
     failures = 0
     news_messages_sent = 0
+    metrics = get_metrics()
     while True:
         try:
             feed = await asyncio.to_thread(feedparser.parse, settings.news_rss)
@@ -169,6 +180,8 @@ async def news_ingest_task(processor: ProcessorState):
             log.info("news_ingest_cancelled")
             break
         except Exception as exc:
+            metrics.inc("news_ingest_failures")
+            metrics.inc("news_ingest_retries")
             log.warning("news_poll_error", extra={"error": str(exc), "attempt": attempt, "failures": failures})
             backoff_base = settings.news_backoff_base_after_failures_sec if failures >= settings.news_backoff_failures_threshold else settings.news_backoff_base_sec
             await sleep_backoff(attempt, base=backoff_base, cap=settings.news_backoff_cap_sec)
@@ -179,7 +192,13 @@ async def news_ingest_task(processor: ProcessorState):
             if failures % settings.ingest_stuck_log_every == 0:
                 log.warning(
                     "ingest_stuck",
-                    extra={"component": "news", "failures": failures, "attempt": attempt},
+                    extra={
+                        "component": "news",
+                        "failures": failures,
+                        "attempt": attempt,
+                        "backoff_base": backoff_base,
+                        "backoff_cap": settings.news_backoff_cap_sec,
+                    },
                 )
             continue
         await asyncio.sleep(settings.news_poll_interval_sec)

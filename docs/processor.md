@@ -64,7 +64,9 @@ Canonical payload models live in `processor/src/io/models/messages.py`.
 - `alerts`: `event_id`, `time`, `symbol`, `window`, `direction`, `ret`, `threshold`, `summary` (optional: `headline`, `sentiment`)
   - Note: `window` in Kafka payloads maps to `window_name` in the `anomalies` table.
 - `news-enriched`: same as `news` plus optional `label`, `confidence`, and `event_id` (sentiment sidecar output)
+- `prices-deadletter`: raw price messages that failed processing
 - `news-deadletter`: raw news messages that failed enrichment (poison-pill avoidance)
+- `summaries-deadletter`: raw summary request messages that failed processing
 
 Timestamp consistency: all Kafka payload `time` fields are ISO 8601 strings (e.g., `2026-02-01T00:00:00+00:00`).
 Downstream consumers should parse all `time` fields as ISO 8601 strings.

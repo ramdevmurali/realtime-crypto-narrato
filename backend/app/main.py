@@ -29,7 +29,7 @@ def _parse_since(since: str) -> datetime:
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    await db.get_pool()
+    await db.init_pool()
     try:
         yield
     finally:

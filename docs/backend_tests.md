@@ -19,6 +19,7 @@ PYTHONPATH=.. .venv/bin/python -m pytest tests_unit tests_integration
 ```
 Integration tests require a live backend server at `http://localhost:8000`
 (run uvicorn separately), plus a running TimescaleDB with schema applied.
+Backend config loads `backend/.env` first, then `infra/.env` (set local DB URL in `backend/.env`).
 
 Minimal runbook:
 1) Start Timescale (e.g., `docker compose -f infra/docker-compose.yml up -d timescaledb`)

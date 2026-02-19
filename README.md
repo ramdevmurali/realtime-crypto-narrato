@@ -23,3 +23,4 @@ See `docs/processor.md` for full details.
 pip install -r backend/requirements.txt
 python3 -m pytest backend/tests
 ```
+Note: backend loads `backend/.env` first (set local `DATABASE_URL` there if needed).

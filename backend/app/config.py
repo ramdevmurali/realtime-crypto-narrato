@@ -18,7 +18,7 @@ def _split_csv(value: str) -> List[str]:
 class Settings(BaseSettings):
     if ConfigDict:
         model_config = ConfigDict(
-            env_file="../infra/.env",
+            env_file=("../.env", "../infra/.env"),
             env_file_encoding="utf-8",
             case_sensitive=False,
             extra="ignore",
@@ -27,7 +27,7 @@ class Settings(BaseSettings):
         )
     else:  # pragma: no cover - legacy fallback
         class Config:
-            env_file = "../infra/.env"
+            env_file = ("../.env", "../infra/.env")
             env_file_encoding = "utf-8"
             case_sensitive = False
             extra = "ignore"

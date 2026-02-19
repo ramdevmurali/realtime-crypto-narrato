@@ -63,6 +63,7 @@ services:
   backend:
     build: ../backend
     container_name: backend
+    env_file: .env
     restart: unless-stopped
     depends_on:
       redpanda:
@@ -97,6 +98,7 @@ services:
       args:
         SENTIMENT_LIGHT_RUNTIME: ${SENTIMENT_LIGHT_RUNTIME:-false}
     container_name: processor
+    env_file: .env
     restart: unless-stopped
     depends_on:
       redpanda:
@@ -136,6 +138,7 @@ services:
       args:
         SENTIMENT_LIGHT_RUNTIME: ${SENTIMENT_LIGHT_RUNTIME:-false}
     container_name: summary-sidecar
+    env_file: .env
     restart: unless-stopped
     depends_on:
       redpanda:
@@ -166,6 +169,7 @@ services:
       args:
         SENTIMENT_LIGHT_RUNTIME: ${SENTIMENT_LIGHT_RUNTIME:-false}
     container_name: sentiment-sidecar
+    env_file: .env
     restart: unless-stopped
     depends_on:
       redpanda:
@@ -197,6 +201,7 @@ services:
   frontend:
     build: ../frontend
     container_name: frontend
+    env_file: .env
     restart: unless-stopped
     depends_on:
       backend:

@@ -7,6 +7,7 @@ The processor layer is stable and structured with clear separation between domai
 - Domain logic decoupled from config/logging.
 - Runtime DDL removed; schema handled via `scripts/migrate_db.py`.
 - Metrics endpoints added for processor + sidecars.
+- /metrics HTTP handler centralized to reduce duplication.
 - DLQ handling includes logging/metrics (and buffering for summary sidecar).
 - LLM + retry helpers split into focused modules.
 - Kafka consumers wired with explicit commit/DLQ rules.

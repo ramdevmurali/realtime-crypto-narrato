@@ -154,6 +154,13 @@ Deterministic anomaly probe (no config edits required):
 PYTHONPATH=processor/src:. .venv/bin/python scripts/probe_anomaly_path.py --check-summaries
 ```
 
+Mandatory recovery/deploy workflow for summary validation:
+1. `make deploy-processor` (build + force-recreate processor and summary sidecar)
+2. `make verify-runtime` (fail fast on stale summary-sidecar container/source mismatch)
+3. If summary DLQ backlog exists, replay with `make replay-summaries-dlq` (use `ARGS="--dry-run"` first)
+4. Re-run probe with strict flags:
+   `PYTHONPATH=processor/src:. .venv/bin/python scripts/probe_anomaly_path.py --check-summaries --require-summary-db-update --require-no-summary-dlq`
+
 SSE stream for headlines (rudimentary sentiment):
 ```
 curl -N 'http://localhost:8000/headlines/stream?limit=5&interval=2'

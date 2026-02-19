@@ -8,6 +8,8 @@ from ..services.anomaly_service import check_anomalies
 from ..utils import with_retries
 from ..processor_state import ProcessorState
 from ..metrics import get_metrics
+from ..config import settings, get_windows, get_thresholds
+from ..logging_config import get_logger
 
 
 @dataclass
@@ -46,7 +48,18 @@ async def process_price(proc: ProcessorState, symbol: str, price: float, ts) -> 
 def compute_price_metrics(proc: ProcessorState, symbol: str, price: float, ts) -> tuple[bool, dict | None]:
     win = proc.price_windows[symbol]
     win.add(ts, price)
-    metrics = compute_metrics(proc.price_windows, symbol, ts)
+    windows = get_windows()
+    thresholds = get_thresholds()
+    logger = getattr(proc, "log", None) or get_logger(__name__)
+    metrics = compute_metrics(
+        proc.price_windows,
+        symbol,
+        ts,
+        windows=windows,
+        thresholds=thresholds,
+        settings=settings,
+        logger=logger,
+    )
     return True, metrics
 
 

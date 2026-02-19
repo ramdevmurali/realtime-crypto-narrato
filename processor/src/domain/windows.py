@@ -3,17 +3,26 @@ from collections import deque
 from datetime import datetime, timedelta
 from typing import Deque, Tuple, List
 
-from ..config import settings, get_windows
-
 
 class PriceWindow:
-    def __init__(self, history_maxlen: int | None = None):
+    def __init__(
+        self,
+        history_maxlen: int,
+        max_window: timedelta,
+        vol_resample_sec: int,
+        window_max_gap_factor: float,
+        vol_max_gap_factor: float | None,
+    ):
         self.buffer: List[Tuple[datetime, float]] = []
         # per-window smoothed z-score state
         self.z_ewma = {}
-        self.history_maxlen = history_maxlen if history_maxlen is not None else settings.window_history_maxlen
+        self.history_maxlen = history_maxlen
         self.return_history: dict[str, Deque[float]] = {}
         self.vol_history: dict[str, Deque[float]] = {}
+        self._max_window = max_window
+        self._vol_resample_sec = vol_resample_sec
+        self._window_max_gap_factor = window_max_gap_factor
+        self._vol_max_gap_factor = vol_max_gap_factor
 
     def _history_deque(self, store: dict[str, Deque[float]], label: str) -> Deque[float]:
         if label not in store:
@@ -70,9 +79,7 @@ class PriceWindow:
         }
 
     def _prune(self, ts: datetime):
-        windows = get_windows()
-        max_window = max(windows.values())
-        cutoff = ts - (max_window + timedelta(seconds=settings.vol_resample_sec))
+        cutoff = ts - (self._max_window + timedelta(seconds=self._vol_resample_sec))
         idx = 0
         while idx < len(self.buffer) and self.buffer[idx][0] < cutoff:
             idx += 1
@@ -112,7 +119,7 @@ class PriceWindow:
             return None
         if ref_ts == latest_ts:
             return None
-        vol_gap_factor = settings.vol_max_gap_factor or settings.window_max_gap_factor
+        vol_gap_factor = self._vol_max_gap_factor or self._window_max_gap_factor
         max_gap = min(window, window * vol_gap_factor)
         if ts - latest_ts > max_gap:
             return None
@@ -126,12 +133,12 @@ class PriceWindow:
         if not self.buffer:
             return None
         cutoff = ts - window
-        step = timedelta(seconds=settings.vol_resample_sec)
+        step = timedelta(seconds=self._vol_resample_sec)
         if step.total_seconds() <= 0:
             return None
         times = [t for t, _ in self.buffer]
         prices = [p for _, p in self.buffer]
-        max_gap = min(window, window * settings.window_max_gap_factor)
+        max_gap = min(window, window * self._window_max_gap_factor)
 
         start_idx = bisect_left(times, cutoff)
         end_idx = bisect_right(times, ts)

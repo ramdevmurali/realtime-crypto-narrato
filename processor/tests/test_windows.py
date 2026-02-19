@@ -6,8 +6,19 @@ from processor.src.domain.windows import PriceWindow
 from processor.src import config as config_module
 
 
+def make_window() -> PriceWindow:
+    windows = config_module.get_windows()
+    return PriceWindow(
+        history_maxlen=config_module.settings.window_history_maxlen,
+        max_window=max(windows.values()),
+        vol_resample_sec=config_module.settings.vol_resample_sec,
+        window_max_gap_factor=config_module.settings.window_max_gap_factor,
+        vol_max_gap_factor=config_module.settings.vol_max_gap_factor,
+    )
+
+
 def test_price_window_prunes_old_points():
-    win = PriceWindow()
+    win = make_window()
     now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
 
     # add points from -25m to now every 5 minutes (6 points)
@@ -26,7 +37,7 @@ def test_price_window_prunes_old_points():
 
 
 def test_price_window_overwrites_same_timestamp():
-    win = PriceWindow()
+    win = make_window()
     ts = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
     win.add(ts, 100.0)
     win.add(ts, 105.0)
@@ -37,7 +48,7 @@ def test_price_window_overwrites_same_timestamp():
 
 
 def test_get_return_happy_path():
-    win = PriceWindow()
+    win = make_window()
     now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
     data = [
         (now - timedelta(minutes=15), 100.0),
@@ -54,7 +65,7 @@ def test_get_return_happy_path():
 
 
 def test_get_return_out_of_order_and_ignores_future():
-    win = PriceWindow()
+    win = make_window()
     now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
     # add out of order and include a future point
     win.add(now, 110.0)
@@ -66,7 +77,7 @@ def test_get_return_out_of_order_and_ignores_future():
 
 
 def test_get_return_strict_window():
-    win = PriceWindow()
+    win = make_window()
     now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
     win.add(now - timedelta(minutes=10), 100.0)
     win.add(now - timedelta(minutes=8), 110.0)
@@ -75,7 +86,7 @@ def test_get_return_strict_window():
 
 
 def test_get_return_stale_latest_returns_none():
-    win = PriceWindow()
+    win = make_window()
     now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
     win.add(now - timedelta(minutes=10), 100.0)
     win.add(now - timedelta(minutes=9), 110.0)
@@ -85,7 +96,7 @@ def test_get_return_stale_latest_returns_none():
 
 
 def test_get_return_insufficient_data():
-    win = PriceWindow()
+    win = make_window()
     now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
     win.add(now, 120.0)
 
@@ -95,7 +106,7 @@ def test_get_return_insufficient_data():
 
 
 def test_get_vol_insufficient_data():
-    win = PriceWindow()
+    win = make_window()
     now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
     # fewer than 3 prices
     win.add(now - timedelta(minutes=1), 100)
@@ -107,7 +118,7 @@ def test_get_vol_insufficient_data():
 def test_get_vol_happy_path(monkeypatch):
     # resample cadence at 1m to make expected values deterministic
     monkeypatch.setattr(config_module.settings, "vol_resample_sec", 60)
-    win = PriceWindow()
+    win = make_window()
     now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
     # uneven sampling: prices every 2 minutes
     prices = [100, 110, 105, 115]
@@ -131,7 +142,7 @@ def test_get_vol_happy_path(monkeypatch):
 
 def test_get_vol_strict_window(monkeypatch):
     monkeypatch.setattr(config_module.settings, "vol_resample_sec", 60)
-    win = PriceWindow()
+    win = make_window()
     now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
     win.add(now - timedelta(minutes=10), 100.0)
     win.add(now - timedelta(minutes=8), 110.0)
@@ -141,7 +152,7 @@ def test_get_vol_strict_window(monkeypatch):
 
 def test_get_vol_stale_latest_returns_none(monkeypatch):
     monkeypatch.setattr(config_module.settings, "vol_resample_sec", 60)
-    win = PriceWindow()
+    win = make_window()
     now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
     win.add(now - timedelta(minutes=10), 100.0)
     win.add(now - timedelta(minutes=8), 110.0)
@@ -152,7 +163,7 @@ def test_get_vol_stale_latest_returns_none(monkeypatch):
 def test_get_vol_respects_custom_gap_factor(monkeypatch):
     monkeypatch.setattr(config_module.settings, "vol_resample_sec", 60)
     monkeypatch.setattr(config_module.settings, "vol_max_gap_factor", 0.5)
-    win = PriceWindow()
+    win = make_window()
     now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
     win.add(now - timedelta(minutes=5), 100.0)
     win.add(now - timedelta(minutes=3), 110.0)
@@ -163,7 +174,7 @@ def test_get_vol_respects_custom_gap_factor(monkeypatch):
 def test_get_vol_returns_none_when_gap_exceeds_max(monkeypatch):
     monkeypatch.setattr(config_module.settings, "vol_resample_sec", 60)
     monkeypatch.setattr(config_module.settings, "vol_max_gap_factor", 0.5)
-    win = PriceWindow()
+    win = make_window()
     now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
     win.add(now - timedelta(minutes=5), 100.0)
     win.add(now - timedelta(minutes=2), 110.0)
@@ -174,7 +185,7 @@ def test_get_vol_returns_none_when_gap_exceeds_max(monkeypatch):
 def test_get_vol_allows_gap_with_default_factor(monkeypatch):
     monkeypatch.setattr(config_module.settings, "vol_resample_sec", 60)
     monkeypatch.setattr(config_module.settings, "vol_max_gap_factor", None)
-    win = PriceWindow()
+    win = make_window()
     now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
     win.add(now - timedelta(minutes=5), 100.0)
     win.add(now - timedelta(minutes=3), 105.0)
@@ -185,7 +196,7 @@ def test_get_vol_allows_gap_with_default_factor(monkeypatch):
 
 def test_price_window_prune_resample_horizon(monkeypatch):
     monkeypatch.setattr(config_module.settings, "vol_resample_sec", 60)
-    win = PriceWindow()
+    win = make_window()
     now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
     win.add(now - timedelta(minutes=17), 90.0)
     win.add(now - timedelta(minutes=16), 95.0)

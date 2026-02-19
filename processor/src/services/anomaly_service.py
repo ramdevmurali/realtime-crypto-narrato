@@ -38,7 +38,16 @@ async def check_anomalies(processor: ProcessorState, symbol: str, ts: datetime, 
 
     headline_ctx = _get_headline_context(processor)
     thresholds = get_thresholds()
-    events = detect_anomalies(symbol, ts, metrics or {}, thresholds, processor.last_alert, headline_ctx)
+    events = detect_anomalies(
+        symbol,
+        ts,
+        metrics or {},
+        thresholds,
+        processor.last_alert,
+        headline_ctx,
+        anomaly_cooldown_sec=settings.anomaly_cooldown_sec,
+        headline_max_age_sec=settings.headline_max_age_sec,
+    )
     for event in events:
         if settings.anomaly_hotpath_stub_summary:
             summary = llm_summarize("stub", None, event.symbol, event.window, event.ret, event.headline, event.sentiment)

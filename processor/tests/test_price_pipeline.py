@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from processor.src.domain.windows import PriceWindow
+from processor.src import config as config_module
 from processor.src.services import price_pipeline
 
 
@@ -14,7 +15,16 @@ class FakeLog:
 
 class FakeProc:
     def __init__(self):
-        self.price_windows = defaultdict(PriceWindow)
+        windows = config_module.get_windows()
+        self.price_windows = defaultdict(
+            lambda: PriceWindow(
+                history_maxlen=config_module.settings.window_history_maxlen,
+                max_window=max(windows.values()),
+                vol_resample_sec=config_module.settings.vol_resample_sec,
+                window_max_gap_factor=config_module.settings.window_max_gap_factor,
+                vol_max_gap_factor=config_module.settings.vol_max_gap_factor,
+            )
+        )
         self.log = FakeLog()
 
 

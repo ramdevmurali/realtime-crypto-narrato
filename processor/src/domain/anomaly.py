@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Dict, List, Tuple
 
-from ..config import settings
 
 
 @dataclass
@@ -34,10 +33,13 @@ def detect_anomalies(
     thresholds: Dict[str, float],
     last_alerts: Dict[Tuple[str, str], datetime],
     headline_ctx: HeadlineContext,
+    *,
+    anomaly_cooldown_sec: int,
+    headline_max_age_sec: int,
 ) -> List[AnomalyEvent]:
     headline = headline_ctx.headline
     sentiment = headline_ctx.sentiment
-    if headline_ctx.headline_ts is None or ts - headline_ctx.headline_ts > timedelta(seconds=settings.headline_max_age_sec):
+    if headline_ctx.headline_ts is None or ts - headline_ctx.headline_ts > timedelta(seconds=headline_max_age_sec):
         headline = None
         sentiment = None
 
@@ -49,7 +51,7 @@ def detect_anomalies(
         if abs(ret) >= threshold:
             key = (symbol, label)
             last_ts = last_alerts.get(key)
-            if last_ts and ts - last_ts < timedelta(seconds=settings.anomaly_cooldown_sec):
+            if last_ts and ts - last_ts < timedelta(seconds=anomaly_cooldown_sec):
                 continue
             direction = "up" if ret >= 0 else "down"
             events.append(

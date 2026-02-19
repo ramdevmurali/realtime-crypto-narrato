@@ -7,7 +7,7 @@ from typing import Any, Dict, Protocol, Tuple
 
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 
-from .config import settings
+from .config import settings, get_windows
 from .domain.windows import PriceWindow
 
 
@@ -61,7 +61,7 @@ class ProcessorState(Protocol):
 class ProcessorStateImpl:
     producer: AIOKafkaProducer | None = None
     consumer: AIOKafkaConsumer | None = None
-    price_windows: Dict[str, PriceWindow] = field(default_factory=lambda: defaultdict(PriceWindow))
+    price_windows: Dict[str, PriceWindow] = field(default_factory=lambda: defaultdict(_price_window_factory))
     last_alert: Dict[Tuple[str, str], datetime] = field(default_factory=dict)
     latest_headline: Tuple[str | None, float | None, datetime | None] = (None, None, None)
     log: Logger | None = None
@@ -93,3 +93,13 @@ class ProcessorStateImpl:
     def record_bad_price(self) -> bool:
         self.bad_price_messages += 1
         return self.bad_price_messages == 1 or self.bad_price_messages % self.bad_price_log_every == 0
+def _price_window_factory() -> PriceWindow:
+    windows = get_windows()
+    max_window = max(windows.values())
+    return PriceWindow(
+        history_maxlen=settings.window_history_maxlen,
+        max_window=max_window,
+        vol_resample_sec=settings.vol_resample_sec,
+        window_max_gap_factor=settings.window_max_gap_factor,
+        vol_max_gap_factor=settings.vol_max_gap_factor,
+    )

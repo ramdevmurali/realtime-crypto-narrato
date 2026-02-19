@@ -10,16 +10,16 @@ from processor.src import config as config_module
 
 
 def test_compute_metrics_returns_none_with_no_history():
-    pw = PriceWindow()
+    pw = make_window()
     now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
     pw.add(now, 100.0)
 
     price_windows = {"btcusdt": pw}
-    assert compute_metrics(price_windows, "btcusdt", now) is None
+    assert compute_metrics_for_test(price_windows, "btcusdt", now) is None
 
 
 def test_compute_metrics_attention_and_returns():
-    pw = PriceWindow()
+    pw = make_window()
     now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
     # returns: 100 -> 105 (-5m) -> 110 (-1m) -> 115 now
     data = [
@@ -31,7 +31,7 @@ def test_compute_metrics_attention_and_returns():
         pw.add(ts, p)
 
     price_windows = {"btcusdt": pw}
-    metrics = compute_metrics(price_windows, "btcusdt", now)
+    metrics = compute_metrics_for_test(price_windows, "btcusdt", now)
     assert metrics is not None
     assert metrics["return_1m"] is not None
     assert metrics["attention"] is not None
@@ -41,7 +41,7 @@ def test_compute_metrics_attention_and_returns():
 
 
 def test_compute_metrics_attention_max_ratio():
-    pw = PriceWindow()
+    pw = make_window()
     now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
     # Craft returns: ~4% over 1m, ~10% over 5m
     data = [
@@ -53,7 +53,7 @@ def test_compute_metrics_attention_max_ratio():
         pw.add(ts, p)
 
     price_windows = {"btcusdt": pw}
-    metrics = compute_metrics(price_windows, "btcusdt", now)
+    metrics = compute_metrics_for_test(price_windows, "btcusdt", now)
     assert metrics is not None
 
     # expected attention from 5m window: |10%| / 8% = 1.25
@@ -63,7 +63,7 @@ def test_compute_metrics_attention_max_ratio():
 
 def test_compute_metrics_propagates_returns_and_vol(monkeypatch):
     monkeypatch.setattr(config_module.settings, "vol_resample_sec", 60)
-    pw = PriceWindow()
+    pw = make_window()
     now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
     # Prices crafted to give clear returns and vols over 5m window
     data = [
@@ -76,7 +76,7 @@ def test_compute_metrics_propagates_returns_and_vol(monkeypatch):
         pw.add(ts, p)
 
     price_windows = {"ethusdt": pw}
-    metrics = compute_metrics(price_windows, "ethusdt", now)
+    metrics = compute_metrics_for_test(price_windows, "ethusdt", now)
     assert metrics is not None
 
     expected_return_5m = (115.5 - 100.0) / 100.0  # 0.155
@@ -96,7 +96,7 @@ def test_compute_metrics_propagates_returns_and_vol(monkeypatch):
 
 
 def test_compute_metrics_return_z_scores():
-    pw = PriceWindow()
+    pw = make_window()
     now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
     # Build a sequence so we get multiple 5m window returns in history.
     prices = [100.0, 102.0, 104.0, 106.0, 108.0, 110.0, 112.0, 114.0]
@@ -106,11 +106,11 @@ def test_compute_metrics_return_z_scores():
     for ts, p in zip(times, prices):
         pw.add(ts, p)
         if ts == times[5]:
-            m1 = compute_metrics(price_windows, "ethusdt", ts)
+            m1 = compute_metrics_for_test(price_windows, "ethusdt", ts)
         if ts == times[6]:
-            m2 = compute_metrics(price_windows, "ethusdt", ts)
+            m2 = compute_metrics_for_test(price_windows, "ethusdt", ts)
         if ts == times[7]:
-            m3 = compute_metrics(price_windows, "ethusdt", ts)
+            m3 = compute_metrics_for_test(price_windows, "ethusdt", ts)
     assert m1 is not None
     assert m2 is not None
     assert m3 is not None
@@ -127,18 +127,18 @@ def test_compute_metrics_return_z_scores():
 
 
 def test_compute_metrics_return_z_score_insufficient_data():
-    pw = PriceWindow()
+    pw = make_window()
     now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
     pw.add(now, 100.0)  # only one point
     price_windows = {"btcusdt": pw}
-    metrics = compute_metrics(price_windows, "btcusdt", now)
+    metrics = compute_metrics_for_test(price_windows, "btcusdt", now)
     # metrics is None overall, but if it weren't, z-scores would be None due to insufficient data
     assert metrics is None
 
 
 def test_vol_z_and_spike(monkeypatch):
     monkeypatch.setattr(config_module.settings, "vol_resample_sec", 60)
-    pw = PriceWindow()
+    pw = make_window()
     now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
     prices = [100.0, 102.0, 104.0, 106.0, 108.0, 110.0, 112.0, 114.0]
     times = [now - timedelta(minutes=7) + timedelta(minutes=i) for i in range(len(prices))]
@@ -170,11 +170,11 @@ def test_vol_z_and_spike(monkeypatch):
     for ts, p in zip(times, prices):
         pw.add(ts, p)
         if ts == times[5]:
-            m1 = compute_metrics(price_windows, "ethusdt", ts)
+            m1 = compute_metrics_for_test(price_windows, "ethusdt", ts)
         if ts == times[6]:
-            m2 = compute_metrics(price_windows, "ethusdt", ts)
+            m2 = compute_metrics_for_test(price_windows, "ethusdt", ts)
         if ts == times[7]:
-            m3 = compute_metrics(price_windows, "ethusdt", ts)
+            m3 = compute_metrics_for_test(price_windows, "ethusdt", ts)
     # Build history with two vols, then compute z for third.
     assert m1 is not None
     assert m2 is not None
@@ -184,20 +184,20 @@ def test_vol_z_and_spike(monkeypatch):
 
 
 def test_vol_z_none_with_insufficient_data():
-    pw = PriceWindow()
+    pw = make_window()
     now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
     pw.add(now - timedelta(minutes=1), 100.0)
     pw.add(now, 101.0)  # only one return point
 
     price_windows = {"btcusdt": pw}
-    metrics = compute_metrics(price_windows, "btcusdt", now)
+    metrics = compute_metrics_for_test(price_windows, "btcusdt", now)
     # metrics not None because returns exist, but vol_z should be None
     if metrics is not None:
         assert metrics["vol_z_1m"] is None
 
 
 def test_return_percentiles_happy_path(monkeypatch):
-    pw = PriceWindow()
+    pw = make_window()
     now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
     prices = [100, 105, 110, 120, 130, 125, 135, 140, 150]
     times = [now - timedelta(minutes=8) + timedelta(minutes=i) for i in range(len(prices))]
@@ -211,7 +211,7 @@ def test_return_percentiles_happy_path(monkeypatch):
     for ts, p in zip(times, prices):
         pw.add(ts, p)
         if ts in {times[5], times[6], times[7], times[8]}:
-            metrics = compute_metrics(price_windows, "btcusdt", ts)
+            metrics = compute_metrics_for_test(price_windows, "btcusdt", ts)
 
     # last metrics call at times[8] should use three prior 5m returns in history
     assert metrics is not None
@@ -234,19 +234,19 @@ def test_return_percentiles_happy_path(monkeypatch):
 
 
 def test_return_percentiles_insufficient_data():
-    pw = PriceWindow()
+    pw = make_window()
     now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
     pw.add(now - timedelta(minutes=1), 100.0)
     pw.add(now, 101.0)  # only one return
     price_windows = {"btcusdt": pw}
-    metrics = compute_metrics(price_windows, "btcusdt", now)
+    metrics = compute_metrics_for_test(price_windows, "btcusdt", now)
     if metrics is not None:
         assert metrics["p05_return_1m"] is None
         assert metrics["p95_return_1m"] is None
 
 
 def test_return_z_ewma_smoothing(monkeypatch):
-    pw = PriceWindow()
+    pw = make_window()
     now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
     pw.add(now - timedelta(minutes=1), 100.0)
     pw.add(now, 110.0)
@@ -265,7 +265,7 @@ def test_return_z_ewma_smoothing(monkeypatch):
     price_windows = {"btcusdt": pw}
 
     current = next(sequences)
-    metrics1 = compute_metrics(price_windows, "btcusdt", now)
+    metrics1 = compute_metrics_for_test(price_windows, "btcusdt", now)
     assert metrics1["return_z_ewma_1m"] == pytest.approx(1.0)
 
     # add a new price to keep window populated and change z-score
@@ -273,20 +273,20 @@ def test_return_z_ewma_smoothing(monkeypatch):
     pw.add(later, 120.0)
 
     current = next(sequences)
-    metrics2 = compute_metrics(price_windows, "btcusdt", later)
+    metrics2 = compute_metrics_for_test(price_windows, "btcusdt", later)
     # ewma: 1 + 0.5*(3-1) = 2
     assert metrics2["return_z_ewma_1m"] == pytest.approx(2.0)
 
 
 def test_return_z_ewma_none_when_no_raw(monkeypatch):
-    pw = PriceWindow()
+    pw = make_window()
     now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
     pw.add(now - timedelta(minutes=5), 100.0)
     pw.add(now, 105.0)
 
     monkeypatch.setattr(metrics_module, "_zscore", lambda v, s: None)
     price_windows = {"btcusdt": pw}
-    metrics = compute_metrics(price_windows, "btcusdt", now)
+    metrics = compute_metrics_for_test(price_windows, "btcusdt", now)
     assert metrics is not None
     assert metrics["return_z_ewma_1m"] is None
     assert metrics["return_z_ewma_5m"] is None
@@ -294,7 +294,7 @@ def test_return_z_ewma_none_when_no_raw(monkeypatch):
 
 
 def test_return_z_ewma_cap(monkeypatch):
-    pw = PriceWindow()
+    pw = make_window()
     now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
     pw.add(now - timedelta(minutes=5), 100.0)
     pw.add(now, 200.0)
@@ -303,18 +303,18 @@ def test_return_z_ewma_cap(monkeypatch):
     monkeypatch.setattr(config_module.settings, "ewma_return_alpha", 1.0)
 
     price_windows = {"btcusdt": pw}
-    metrics = compute_metrics(price_windows, "btcusdt", now)
+    metrics = compute_metrics_for_test(price_windows, "btcusdt", now)
     assert metrics["return_z_ewma_5m"] == pytest.approx(6.0)
 
 
 def _metrics_for_series(monkeypatch, prices, start, step_minutes=1, symbol="btcusdt"):
     monkeypatch.setattr(config_module.settings, "vol_resample_sec", 60)
-    pw = PriceWindow()
+    pw = make_window()
     times = [start + timedelta(minutes=i * step_minutes) for i in range(len(prices))]
     metrics = None
     for ts, p in zip(times, prices):
         pw.add(ts, p)
-        metrics = compute_metrics({symbol: pw}, symbol, ts)
+        metrics = compute_metrics_for_test({symbol: pw}, symbol, ts)
     return metrics
 
 
@@ -384,13 +384,13 @@ def test_metrics_reference_numpy(monkeypatch):
     prices = [100, 103, 101, 106, 104, 109, 108, 111, 113]
     now = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
     start = now - timedelta(minutes=8)
-    pw = PriceWindow()
+    pw = make_window()
 
     metrics = None
     times = [start + timedelta(minutes=i) for i in range(len(prices))]
     for ts, p in zip(times, prices):
         pw.add(ts, p)
-        metrics = compute_metrics({"btcusdt": pw}, "btcusdt", ts)
+        metrics = compute_metrics_for_test({"btcusdt": pw}, "btcusdt", ts)
 
     assert metrics is not None
     window_prices = prices[-6:]
@@ -412,3 +412,24 @@ def test_metrics_reference_numpy(monkeypatch):
     p95 = float(np.quantile(prior_returns, config_module.settings.return_percentile_high, method="linear"))
     assert metrics["p05_return_5m"] == pytest.approx(p05, rel=1e-6)
     assert metrics["p95_return_5m"] == pytest.approx(p95, rel=1e-6)
+def make_window() -> PriceWindow:
+    windows = config_module.get_windows()
+    return PriceWindow(
+        history_maxlen=config_module.settings.window_history_maxlen,
+        max_window=max(windows.values()),
+        vol_resample_sec=config_module.settings.vol_resample_sec,
+        window_max_gap_factor=config_module.settings.window_max_gap_factor,
+        vol_max_gap_factor=config_module.settings.vol_max_gap_factor,
+    )
+
+
+def compute_metrics_for_test(price_windows, symbol: str, ts):
+    return compute_metrics(
+        price_windows,
+        symbol,
+        ts,
+        windows=config_module.get_windows(),
+        thresholds=config_module.get_thresholds(),
+        settings=config_module.settings,
+        logger=None,
+    )

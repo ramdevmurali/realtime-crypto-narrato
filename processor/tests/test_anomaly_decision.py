@@ -15,6 +15,8 @@ def test_detect_anomalies_respects_threshold():
         thresholds,
         last_alerts={},
         headline_ctx=HeadlineContext(None, None, None),
+        anomaly_cooldown_sec=settings.anomaly_cooldown_sec,
+        headline_max_age_sec=settings.headline_max_age_sec,
     )
     assert events == []
 
@@ -31,6 +33,8 @@ def test_detect_anomalies_respects_cooldown():
         thresholds,
         last_alerts=last_alerts,
         headline_ctx=HeadlineContext(None, None, None),
+        anomaly_cooldown_sec=settings.anomaly_cooldown_sec,
+        headline_max_age_sec=settings.headline_max_age_sec,
     )
     assert events == []
 
@@ -51,6 +55,8 @@ def test_detect_anomalies_omits_stale_headline():
         thresholds,
         last_alerts={},
         headline_ctx=headline_ctx,
+        anomaly_cooldown_sec=settings.anomaly_cooldown_sec,
+        headline_max_age_sec=settings.headline_max_age_sec,
     )
     assert len(events) == 1
     assert events[0].headline is None

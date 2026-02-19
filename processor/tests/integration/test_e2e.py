@@ -1,4 +1,5 @@
 import asyncio
+import json
 import time
 import uuid
 from datetime import timedelta
@@ -78,6 +79,27 @@ async def _wait_for_calls(counter: dict, min_count: int, timeout_sec: int = 5):
             return
         await asyncio.sleep(0.05)
     raise AssertionError("timeout waiting for retry attempts")
+
+
+async def _wait_for_topic_symbol(topic: str, symbol: str, timeout_sec: int = 10):
+    consumer = AIOKafkaConsumer(
+        topic,
+        bootstrap_servers=settings.kafka_brokers,
+        group_id=f"{topic}-it-{uuid.uuid4().hex}",
+        auto_offset_reset="earliest",
+    )
+    await consumer.start()
+    try:
+        deadline = time.monotonic() + timeout_sec
+        while time.monotonic() < deadline:
+            timeout = min(1.0, max(0.1, deadline - time.monotonic()))
+            msg = await asyncio.wait_for(consumer.getone(), timeout=timeout)
+            payload = json.loads(msg.value.decode())
+            if payload.get("symbol") == symbol:
+                return payload
+    finally:
+        await consumer.stop()
+    raise AssertionError(f"timeout waiting for {topic} message for {symbol}")
 
 
 @pytest.mark.integration
@@ -191,5 +213,68 @@ async def test_e2e_kafka_transient_failure(integration_services, integration_set
 
         await _wait_for_count("SELECT count(*) FROM anomalies WHERE symbol=$1", ("btcusdt",), 1)
         assert calls["count"] >= 2
+    finally:
+        await _stop_processor(proc, task)
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_e2e_test_mode_emits_alert_and_summary(integration_services, integration_settings, monkeypatch):
+    group_id = f"processor-it-{uuid.uuid4().hex}"
+    monkeypatch.setattr(settings, "anomaly_test_mode", True)
+    monkeypatch.setattr(settings, "anomaly_test_threshold", 0.001)
+    monkeypatch.setattr(settings, "anomaly_test_cooldown_sec", 0)
+    proc, task = await _start_processor(group_id)
+    symbol = f"diag-{uuid.uuid4().hex[:6]}"
+    try:
+        now = now_utc()
+        prices = [
+            PriceMsg(symbol=symbol, price=100.0, time=now),
+            PriceMsg(symbol=symbol, price=100.3, time=now + timedelta(seconds=30)),
+        ]
+        await _publish_prices(prices)
+        await _wait_for_count("SELECT count(*) FROM anomalies WHERE symbol=$1", (symbol,), 1)
+        alert_payload = await _wait_for_topic_symbol(settings.alerts_topic, symbol)
+        summary_payload = await _wait_for_topic_symbol(settings.summaries_topic, symbol)
+        assert alert_payload["symbol"] == symbol
+        assert summary_payload["symbol"] == symbol
+    finally:
+        await _stop_processor(proc, task)
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_e2e_stale_headline_still_emits_without_context(integration_services, integration_settings, monkeypatch):
+    group_id = f"processor-it-{uuid.uuid4().hex}"
+    monkeypatch.setattr(settings, "anomaly_test_mode", True)
+    monkeypatch.setattr(settings, "anomaly_test_threshold", 0.001)
+    monkeypatch.setattr(settings, "anomaly_test_cooldown_sec", 0)
+    proc, task = await _start_processor(group_id)
+    symbol = f"diag-{uuid.uuid4().hex[:6]}"
+    try:
+        now = now_utc()
+        proc.latest_headline = ("Old headline", 0.2, now - timedelta(seconds=settings.headline_max_age_sec + 60))
+        prices = [
+            PriceMsg(symbol=symbol, price=100.0, time=now),
+            PriceMsg(symbol=symbol, price=100.4, time=now + timedelta(seconds=30)),
+        ]
+        await _publish_prices(prices)
+        await _wait_for_count("SELECT count(*) FROM anomalies WHERE symbol=$1", (symbol,), 1)
+        await init_pool()
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT headline, sentiment
+                FROM anomalies
+                WHERE symbol=$1
+                ORDER BY time DESC
+                LIMIT 1
+                """,
+                symbol,
+            )
+        assert row is not None
+        assert row["headline"] is None
+        assert row["sentiment"] is None
     finally:
         await _stop_processor(proc, task)

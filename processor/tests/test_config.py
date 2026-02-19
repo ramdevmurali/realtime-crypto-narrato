@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from processor.src.config import Settings
+from processor.src.config import Settings, get_thresholds, get_windows, settings
 
 
 def test_invalid_window_labels_duplicate():
@@ -42,3 +42,36 @@ def test_invalid_percentiles():
 def test_invalid_sentiment_poll_timeout():
     with pytest.raises(ValidationError):
         Settings(sentiment_poll_timeout_ms=0)
+
+
+def test_anomaly_test_mode_overrides_thresholds(monkeypatch):
+    monkeypatch.setattr(settings, "anomaly_test_mode", True)
+    monkeypatch.setattr(settings, "anomaly_test_threshold", 0.123)
+    thresholds = get_thresholds()
+    assert set(thresholds.keys()) == set(get_windows().keys())
+    assert all(value == 0.123 for value in thresholds.values())
+
+
+def test_default_thresholds_unchanged_when_test_mode_off(monkeypatch):
+    monkeypatch.setattr(settings, "anomaly_test_mode", False)
+    monkeypatch.setattr(settings, "alert_threshold_1m", 0.05)
+    monkeypatch.setattr(settings, "alert_threshold_5m", 0.08)
+    monkeypatch.setattr(settings, "alert_threshold_15m", 0.12)
+    thresholds = get_thresholds()
+    assert thresholds == {"1m": 0.05, "5m": 0.08, "15m": 0.12}
+
+
+def test_news_rss_urls_fallback_to_single_feed():
+    cfg = Settings(news_rss="https://example.com/rss", news_rss_urls_raw="")
+    assert cfg.news_rss_urls == ["https://example.com/rss"]
+
+
+def test_news_rss_urls_csv_parsed():
+    cfg = Settings(NEWS_RSS_URLS="https://a.example/rss, https://b.example/rss")
+    assert cfg.news_rss_urls == ["https://a.example/rss", "https://b.example/rss"]
+
+
+def test_empty_optional_int_env_parsed_as_none():
+    cfg = Settings(summary_metrics_port="", sentiment_max_latency_ms="")
+    assert cfg.summary_metrics_port is None
+    assert cfg.sentiment_max_latency_ms is None

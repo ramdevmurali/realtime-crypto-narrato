@@ -6,6 +6,7 @@ import json
 
 from processor.src.services import anomaly_service
 from processor.src.config import settings
+from processor.src import metrics as metrics_module
 
 
 class FakeProducer:
@@ -295,3 +296,64 @@ async def test_check_anomalies_llm_offloaded(monkeypatch):
     await anomaly_service.check_anomalies(proc, "btcusdt", ts, metrics, publisher=proc.producer)
 
     assert len(proc.producer.sent) == 2
+
+
+@pytest.mark.asyncio
+async def test_check_anomalies_uses_test_mode_cooldown(monkeypatch):
+    captured = {}
+
+    def fake_detect(*args, **kwargs):
+        captured["cooldown"] = kwargs["anomaly_cooldown_sec"]
+        return []
+
+    monkeypatch.setattr(anomaly_service, "detect_anomalies", fake_detect)
+    monkeypatch.setattr(settings, "anomaly_test_mode", True)
+    monkeypatch.setattr(settings, "anomaly_test_cooldown_sec", 0)
+
+    proc = FakeProcessor()
+    ts = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+    await anomaly_service.check_anomalies(proc, "btcusdt", ts, {}, publisher=proc.producer)
+    assert captured["cooldown"] == 0
+
+
+@pytest.mark.asyncio
+async def test_check_anomalies_records_decision_metrics(monkeypatch):
+    metrics_module._GLOBAL_METRICS = metrics_module.MetricsRegistry(service_name="processor")
+
+    async def fake_insert_anomaly(*args, **kwargs):
+        return True
+
+    monkeypatch.setattr(anomaly_service, "insert_anomaly", fake_insert_anomaly)
+    monkeypatch.setattr(anomaly_service, "mark_anomaly_alert_published", _noop)
+
+    proc = FakeProcessor()
+    ts = datetime(2026, 1, 27, 12, 0, tzinfo=timezone.utc)
+
+    await anomaly_service.check_anomalies(
+        proc,
+        "btcusdt",
+        ts,
+        {"return_1m": settings.alert_threshold_1m + 0.02},
+        publisher=proc.producer,
+    )
+    await anomaly_service.check_anomalies(
+        proc,
+        "btcusdt",
+        ts + timedelta(seconds=10),
+        {"return_1m": settings.alert_threshold_1m + 0.02},
+        publisher=proc.producer,
+    )
+    await anomaly_service.check_anomalies(
+        proc,
+        "btcusdt",
+        ts + timedelta(seconds=70),
+        {"return_1m": settings.alert_threshold_1m - 0.01},
+        publisher=proc.producer,
+    )
+
+    counters = metrics_module.get_metrics().snapshot()["counters"]
+    assert counters.get("processor.anomaly_candidates") == 3
+    assert counters.get("processor.anomaly_emitted") == 1
+    assert counters.get("processor.anomaly_suppressed_cooldown") == 1
+    assert counters.get("processor.anomaly_suppressed_threshold") == 1
+    assert counters.get("processor.anomaly_emitted_without_headline") == 1

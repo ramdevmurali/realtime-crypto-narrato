@@ -8,6 +8,7 @@ import pytest
 from processor.src.services import ingest
 from processor.src.services import sentiment_sidecar
 from processor.src.config import settings
+from processor.src import metrics as metrics_module
 
 
 class FakeWS:
@@ -47,6 +48,21 @@ class FakeProcessor:
 
     def record_latest_headline(self, title, sentiment, ts):
         self.latest_headline = (title, sentiment, ts)
+
+
+class FakeLog:
+    def __init__(self):
+        self.warnings = []
+        self.infos = []
+
+    def warning(self, msg, extra=None):
+        self.warnings.append((msg, extra or {}))
+
+    def info(self, msg, extra=None):
+        self.infos.append((msg, extra or {}))
+
+    def error(self, msg, extra=None):
+        self.warnings.append((msg, extra or {}))
 
 
 def test_build_news_msg_dedupes():
@@ -362,3 +378,117 @@ async def test_price_ingest_task_falls_back_to_now(monkeypatch):
     _, payload = proc.producer.sent[0]
     data = json.loads(payload.decode())
     assert data["time"].startswith("2026-01-27T12:00:00")
+
+
+@pytest.mark.asyncio
+async def test_news_ingest_task_merges_multi_feed_and_dedupes(monkeypatch):
+    metrics_module._GLOBAL_METRICS = metrics_module.MetricsRegistry(service_name="processor")
+
+    class Feed:
+        def __init__(self, title, entries):
+            self.feed = {"title": title}
+            self.entries = entries
+
+        def get(self, key, default=None):
+            if key == "feed":
+                return self.feed
+            return default
+
+    def fake_parse(url):
+        if "bad" in url:
+            raise RuntimeError("feed down")
+        if "feed-a" in url:
+            return Feed(
+                "feed-a",
+                [
+                    {
+                        "id": "shared",
+                        "title": "A shared headline",
+                        "link": "https://a.example/shared",
+                        "published": "2026-01-27T12:00:00Z",
+                    },
+                ],
+            )
+        return Feed(
+            "feed-b",
+            [
+                {
+                    "id": "shared",
+                    "title": "B duplicate headline",
+                    "link": "https://b.example/shared",
+                    "published": "2026-01-27T12:00:00Z",
+                },
+                {
+                    "id": "unique-b",
+                    "title": "B unique headline",
+                    "link": "https://b.example/unique",
+                    "published": "2026-01-27T12:00:01Z",
+                },
+            ],
+        )
+
+    published = []
+
+    async def fake_publish(_processor, msg):
+        published.append(msg)
+
+    async def stop_after_one_poll(_seconds):
+        raise asyncio.CancelledError()
+
+    monkeypatch.setattr(settings, "news_rss_urls_raw", "https://feed-a/rss,https://bad/rss,https://feed-b/rss")
+    monkeypatch.setattr(settings, "news_batch_limit", 20)
+    monkeypatch.setattr(ingest.feedparser, "parse", fake_parse)
+    monkeypatch.setattr(ingest, "publish_news_msg", fake_publish)
+    monkeypatch.setattr(ingest.asyncio, "sleep", stop_after_one_poll)
+
+    proc = FakeProcessor()
+    with pytest.raises(asyncio.CancelledError):
+        await ingest.news_ingest_task(proc)
+
+    assert len(published) == 2
+    assert {msg.source for msg in published} == {"feed-a", "feed-b"}
+    counters = metrics_module.get_metrics().snapshot()["counters"]
+    assert counters.get("processor.news_entries_ingested") == 2
+    assert counters.get("processor.news_feed_errors") == 1
+
+
+@pytest.mark.asyncio
+async def test_news_ingest_task_tracks_stale_headline(monkeypatch):
+    metrics_module._GLOBAL_METRICS = metrics_module.MetricsRegistry(service_name="processor")
+
+    class Feed:
+        def __init__(self):
+            self.feed = {"title": "feed-a"}
+            self.entries = []
+
+        def get(self, key, default=None):
+            if key == "feed":
+                return self.feed
+            return default
+
+    sleep_calls = {"count": 0}
+
+    async def sleep_two_cycles(_seconds):
+        sleep_calls["count"] += 1
+        if sleep_calls["count"] >= 2:
+            raise asyncio.CancelledError()
+        return None
+
+    monkeypatch.setattr(settings, "news_rss_urls_raw", "https://feed-a/rss")
+    monkeypatch.setattr(settings, "headline_stale_warn_sec", 60)
+    monkeypatch.setattr(settings, "news_stale_log_every", 2)
+    monkeypatch.setattr(ingest.feedparser, "parse", lambda _url: Feed())
+    monkeypatch.setattr(ingest.asyncio, "sleep", sleep_two_cycles)
+
+    proc = FakeProcessor()
+    proc.log = FakeLog()
+    proc.latest_headline = ("Old headline", 0.1, datetime(2026, 1, 27, 11, 0, tzinfo=timezone.utc))
+
+    with pytest.raises(asyncio.CancelledError):
+        await ingest.news_ingest_task(proc)
+
+    counters = metrics_module.get_metrics().snapshot()["counters"]
+    rolling = metrics_module.get_metrics().snapshot()["rolling"]
+    assert counters.get("processor.news_stale_polls") == 2
+    assert rolling.get("processor.latest_headline_age_sec", {}).get("count", 0) >= 2
+    assert len([w for w in proc.log.warnings if w[0] == "headline_stale"]) >= 2

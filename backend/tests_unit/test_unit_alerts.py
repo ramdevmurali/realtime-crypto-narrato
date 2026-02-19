@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from fastapi.testclient import TestClient
 
-from backend.app import main, db
+from backend.app import main, db, streams
 
 
 def test_alerts(monkeypatch):
@@ -79,7 +79,7 @@ def test_alerts_stream_payload(monkeypatch):
     monkeypatch.setattr(db, "fetch_alerts", fake_fetch_alerts)
 
     async def _get_one_event():
-        gen = main._alerts_event_generator(limit=1, interval=0.01)
+        gen = streams.alerts_event_generator(limit=1, interval=0.01)
         return await gen.__anext__()
 
     payload = asyncio.run(_get_one_event())

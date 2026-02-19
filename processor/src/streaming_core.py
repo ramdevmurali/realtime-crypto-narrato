@@ -19,6 +19,7 @@ from .services.price_consumer import consume_prices
 from .runtime_interface import RuntimeService
 from .processor_state import ProcessorStateImpl
 from .metrics import get_metrics
+from .metrics_http import make_metrics_handler
 
 
 class StreamProcessor(ProcessorStateImpl, RuntimeService):
@@ -64,38 +65,8 @@ class StreamProcessor(ProcessorStateImpl, RuntimeService):
         await consume_prices(self)
 
     async def _handle_metrics(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
-        closed = False
-        try:
-            request_line = await reader.readline()
-            if not request_line:
-                writer.close()
-                closed = True
-                return
-            parts = request_line.decode(errors="ignore").split()
-            path = parts[1] if len(parts) > 1 else "/"
-            while True:
-                line = await reader.readline()
-                if not line or line == b"\r\n":
-                    break
-            if path != "/metrics":
-                body = json.dumps({"error": "not found"}).encode()
-                status = "404 Not Found"
-            else:
-                body = json.dumps(get_metrics().snapshot()).encode()
-                status = "200 OK"
-            headers = [
-                f"HTTP/1.1 {status}",
-                "Content-Type: application/json",
-                f"Content-Length: {len(body)}",
-                "Connection: close",
-                "",
-                "",
-            ]
-            writer.write("\r\n".join(headers).encode() + body)
-            await writer.drain()
-        finally:
-            if not closed:
-                writer.close()
+        handler = make_metrics_handler(lambda: get_metrics().snapshot())
+        await handler(reader, writer)
 
     async def _start_metrics_server(self) -> None:
         if not settings.processor_metrics_port:

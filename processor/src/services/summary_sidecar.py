@@ -10,6 +10,7 @@ from ..config import settings
 from ..logging_config import get_logger
 from ..runtime_interface import RuntimeService
 from ..metrics import get_metrics
+from ..metrics_http import make_metrics_handler
 from ..io.db import init_pool, fetch_anomaly_alert_published, mark_anomaly_alert_published
 from ..llm import llm_summarize
 from ..retry import with_retries
@@ -69,38 +70,8 @@ class SummarySidecar(SidecarRuntime, RuntimeService):
         self._llm_semaphore = asyncio.Semaphore(settings.summary_llm_concurrency)
 
     async def _handle_metrics(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
-        closed = False
-        try:
-            request_line = await reader.readline()
-            if not request_line:
-                writer.close()
-                closed = True
-                return
-            parts = request_line.decode(errors="ignore").split()
-            path = parts[1] if len(parts) > 1 else "/"
-            while True:
-                line = await reader.readline()
-                if not line or line == b"\r\n":
-                    break
-            if path != "/metrics":
-                body = json.dumps({"error": "not found"}).encode()
-                status = "404 Not Found"
-            else:
-                body = json.dumps(get_metrics("summary").snapshot()).encode()
-                status = "200 OK"
-            headers = [
-                f"HTTP/1.1 {status}",
-                "Content-Type: application/json",
-                f"Content-Length: {len(body)}",
-                "Connection: close",
-                "",
-                "",
-            ]
-            writer.write("\r\n".join(headers).encode() + body)
-            await writer.drain()
-        finally:
-            if not closed:
-                writer.close()
+        handler = make_metrics_handler(lambda: get_metrics("summary").snapshot())
+        await handler(reader, writer)
 
     async def _run_loop(self) -> None:
         while not self.should_stop():

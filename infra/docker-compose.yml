@@ -120,6 +120,8 @@ services:
       NEWS_TOPIC: news
       ALERTS_TOPIC: alerts
       SUMMARIES_TOPIC: summaries
+      PROCESSOR_METRICS_HOST: ${PROCESSOR_METRICS_HOST}
+      PROCESSOR_METRICS_PORT: ${PROCESSOR_METRICS_PORT}
       PYTHONPATH: /app
     networks:
       - streaming
@@ -148,6 +150,8 @@ services:
       OPENAI_MODEL: ${OPENAI_MODEL}
       ALERTS_TOPIC: alerts
       SUMMARIES_TOPIC: summaries
+      SUMMARY_METRICS_HOST: ${SUMMARY_METRICS_HOST}
+      SUMMARY_METRICS_PORT: ${SUMMARY_METRICS_PORT}
       PYTHONPATH: /app
     working_dir: /app
     command: python -m src.services.summary_sidecar

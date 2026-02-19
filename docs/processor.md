@@ -159,62 +159,20 @@ Set any of these env vars to enable:
 If a value is unset/empty, no retention policy is applied for that table.
 
 ## Runtime Policies
-- Late message tolerance: `LATE_PRICE_TOLERANCE_SEC` (drop if older than last seen minus tolerance).
-- Anomaly cooldown: `ANOMALY_COOLDOWN_SEC` (per symbol+window).
-- Log cadence: `BAD_PRICE_LOG_EVERY`, `LATE_PRICE_LOG_EVERY`,
-  `PRICE_PUBLISH_LOG_EVERY`, `NEWS_PUBLISH_LOG_EVERY`, `INGEST_STUCK_LOG_EVERY`.
-- Backoff tuning:
-  `PRICE_BACKOFF_*`, `NEWS_BACKOFF_*`, `RETRY_MAX_ATTEMPTS`,
-  `RETRY_BACKOFF_BASE_SEC`, `RETRY_BACKOFF_CAP_SEC`,
-  `RETRY_JITTER_MIN`, `RETRY_JITTER_MAX`.
-- Kafka consumer offset reset: `KAFKA_AUTO_OFFSET_RESET`.
-- Processor consumer group: `PROCESSOR_CONSUMER_GROUP`.
-- DB init on startup: `ENABLE_DB_INIT` (set true for dev convenience).
-  In prod, set `ENABLE_DB_INIT=false` and run migrations out‑of‑band:
-  `PYTHONPATH=processor/src:. .venv/bin/python scripts/migrate_db.py`
-- Metrics tuning: `EWMA_Z_CAP`, `PERCENTILE_MIN_SAMPLES`.
-- Alert logging: `ALERT_LOG_EVERY`.
-- Summary sidecar: `SUMMARY_LLM_CONCURRENCY`.
-- Sidecar restart policy: `SIDECAR_RESTART_BACKOFF_SEC`, `SIDECAR_RESTART_MAX_PER_MIN`.
-- Task restart policy: `TASK_RESTART_BACKOFF_SEC`, `TASK_RESTART_MAX_PER_MIN`.
-- Summary DLQ buffer: `SUMMARY_DLQ_BUFFER_PATH`, `SUMMARY_DLQ_BUFFER_MAX_BYTES` (JSONL append-only).
-- LLM generation: `LLM_MAX_TOKENS`, `LLM_TEMPERATURE`.
-- LLM fallback logging: `LLM_FALLBACK_LOG_EVERY` and counter `llm_fallbacks`.
-- LLM fallback metrics (namespaced): `llm.llm_fallbacks`.
-- Anomaly hot path summary: `ANOMALY_HOTPATH_STUB_SUMMARY` (default true for low latency).
-- RSS dedupe: `RSS_SEEN_TTL_SEC`, `RSS_SEEN_MAX`.
-- RSS defaults: `RSS_DEFAULT_TITLE`, `RSS_DEFAULT_SOURCE`.
-- Sentiment sidecar: `SENTIMENT_PROVIDER`, `SENTIMENT_MODEL_PATH`, `SENTIMENT_BATCH_SIZE`,
-  `SENTIMENT_POLL_TIMEOUT_MS`, `SENTIMENT_MAX_LATENCY_MS`, `SENTIMENT_FALLBACK_ON_SLOW`, `SENTIMENT_FAIL_FAST`,
-  `SENTIMENT_FALLBACK_LOG_EVERY`, `SENTIMENT_LIGHT_RUNTIME`, `SENTIMENT_METRICS_HOST`, `SENTIMENT_METRICS_PORT`,
-  `SENTIMENT_POS_THRESHOLD`, `SENTIMENT_NEG_THRESHOLD`, `SENTIMENT_MAX_SEQ_LEN`,
-  `SENTIMENT_SIDECAR_GROUP`, `NEWS_ENRICHED_TOPIC`, `NEWS_DLQ_TOPIC`.
-- Summary metrics: `SUMMARY_METRICS_HOST`, `SUMMARY_METRICS_PORT` (optional; enable `/metrics`).
-- Processor metrics: `PROCESSOR_METRICS_HOST`, `PROCESSOR_METRICS_PORT` (optional; enable `/metrics`).
-- Sentiment perf logs: `sentiment_infer_ms`, `batch_size`, `queue_lag_ms`, `fallback_used`.
-  If `SENTIMENT_MAX_LATENCY_MS` is set, slow batches log `sentiment_batch_slow`.
-  Fallback warnings are rate-limited by `SENTIMENT_FALLBACK_LOG_EVERY`.
-- Startup check: if `SENTIMENT_PROVIDER=onnx`, the sidecar attempts a model load on start.
-  Failure logs `sentiment_model_load_failed` and continues unless `SENTIMENT_FAIL_FAST=true`.
-- Metrics endpoint: processor exposes `/metrics` (JSON) on
-  `PROCESSOR_METRICS_HOST:PROCESSOR_METRICS_PORT`.
-  Sentiment sidecar exposes `/metrics` (JSON) on
-  `SENTIMENT_METRICS_HOST:SENTIMENT_METRICS_PORT` and includes rolling stats for
-  inference and queue lag plus counters (`sentiment_batches`, `sentiment_fallbacks`,
-  `sentiment_dlq`, `sentiment_errors`).
-  Summary sidecar exposes `/metrics` on `SUMMARY_METRICS_HOST:SUMMARY_METRICS_PORT`
-  and includes counters (`summary_batches`, `summary_success`, `summary_failures`,
-  `summary_dlq`, `summary_publish_skipped`, `summary_dlq_failed`) plus rolling `summary_latency_ms`.
-  These are **telemetry metrics** (operational counters), not the price metrics stored in the `metrics` table.
-  Metrics keys may be namespaced by component (e.g., `summary.*`, `processor.*`, `llm.*`).
-  Processor counters include `processor.price_insert_failed`, `processor.metric_compute_failed`,
-  `processor.metric_insert_failed`, `processor.anomaly_check_failed`,
-  `processor.price_dlq_sent`, `processor.price_dlq_send_failed`, `processor.price_pipeline_failed`,
-  `processor.retry.total`, and `processor.retry.<op_name>`.
-  Metrics snapshots also include `service_name` and `start_time` for instance identity.
-- Ingest telemetry counters: `price_ingest_failures`, `price_ingest_retries`,
-  `news_ingest_failures`, `news_ingest_retries`.
-- Light runtime: set `SENTIMENT_LIGHT_RUNTIME=true` to use `tokenizers` directly
-  and avoid importing `transformers` (useful for slimmer images).
-  For Docker builds, set `SENTIMENT_LIGHT_RUNTIME=true` so the image installs
-  `requirements-light.txt` (no `transformers`); otherwise it uses `requirements.txt`.
+This list is intentionally brief to avoid drift. Source of truth lives in
+`processor/src/config.py` and `infra/.env.example`.
+
+Categories:
+- Ingest/backoff and retry tuning
+- Kafka consumer settings
+- DB init/migration safety
+- Metrics endpoints + telemetry
+- Sidecar + sentiment/LLM behavior
+
+Examples of critical knobs:
+- `ENABLE_DB_INIT` (dev convenience; set false in prod and run `scripts/migrate_db.py`)
+- `KAFKA_AUTO_OFFSET_RESET`, `PROCESSOR_CONSUMER_GROUP`
+- `LATE_PRICE_TOLERANCE_SEC`, `ANOMALY_COOLDOWN_SEC`
+- `PROCESSOR_METRICS_PORT`, `SUMMARY_METRICS_PORT`
+- `SENTIMENT_PROVIDER`, `SENTIMENT_MODEL_PATH`
+- `LLM_MAX_TOKENS`, `LLM_TEMPERATURE`

@@ -16,7 +16,7 @@
 
 ## Config
 - `backend/app/config.py` via pydantic-settings.
-  - `database_url` (default `postgresql://postgres:postgres@timescaledb:5432/postgres` or `anomalies` depending on env)
+  - `database_url` (default `postgresql://postgres:postgres@timescaledb:5432/postgres`; local dev often uses `postgresql://postgres:postgres@localhost:5432/anomalies` via `infra/.env`)
   - `kafka_brokers` not used yet (reserved for future streaming).
   - Topics kept for parity: `price_topic`, `news_topic`, `alerts_topic`.
   - Host/port: `api_host` (0.0.0.0), `api_port` (8000).

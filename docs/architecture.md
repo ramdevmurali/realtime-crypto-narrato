@@ -220,10 +220,7 @@ flowchart LR
 | Replay flow | `replay_summaries_dlq_topic.py` | `summaries-deadletter` -> `summaries` | `scripts/replay_summaries_dlq_topic.py:16-97`, `Makefile:16-17` |
 | Redis status | configured only (`redis_url`, compose service) | no active runtime usage in processor/backend flow | `infra/docker-compose.yml:49-61`, `processor/src/config.py:34` |
 
-## Review Checklist
-- No fabricated edges.
-- All active Kafka topics represented: `prices`, `news`, `news-enriched`, `summaries`, `alerts`, `prices-deadletter`, `news-deadletter`, `summaries-deadletter`.
-- All active Timescale tables represented: `prices`, `metrics`, `headlines`, `anomalies`.
-- `/alerts/stream` included.
-- summary-sidecar consumes `summaries` (not `alerts`).
-- sentiment-sidecar consumes `news`.
+## Quick Sanity Checks
+- Topics and tables in the diagrams match current runtime (`prices/news/news-enriched/summaries/alerts` + DLQs, and `prices/metrics/headlines/anomalies`).
+- Sidecar wiring is correct: summary-sidecar consumes `summaries`; sentiment-sidecar consumes `news`.
+- Backend stream coverage is explicit: `/headlines/stream` and `/alerts/stream` are represented as DB-polled SSE.

@@ -6,7 +6,8 @@ import asyncio
 from ..config import settings, get_thresholds
 from ..domain.anomaly import AnomalyEvent, HeadlineContext, detect_anomalies
 from ..io.db import insert_anomaly, fetch_anomaly_alert_published, mark_anomaly_alert_published
-from ..utils import llm_summarize, with_retries
+from ..llm import llm_summarize
+from ..retry import with_retries
 from ..logging_config import get_logger
 from ..io.models.messages import SummaryRequestMsg, AlertMsg
 from ..processor_state import ProcessorState, Publisher

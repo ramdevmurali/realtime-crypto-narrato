@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from ..io.db import insert_price, insert_metric
 from ..domain.metrics import compute_metrics
 from ..services.anomaly_service import check_anomalies
-from ..utils import with_retries
+from ..retry import with_retries
 from ..processor_state import ProcessorState
 from ..metrics import get_metrics
 from ..config import settings, get_windows, get_thresholds

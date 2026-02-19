@@ -11,7 +11,9 @@ from ..logging_config import get_logger
 from ..runtime_interface import RuntimeService
 from ..metrics import get_metrics
 from ..io.db import init_pool, fetch_anomaly_alert_published, mark_anomaly_alert_published
-from ..utils import llm_summarize, with_retries, now_utc, parse_iso_datetime
+from ..llm import llm_summarize
+from ..retry import with_retries
+from ..utils import now_utc, parse_iso_datetime
 from ..io.models.messages import SummaryRequestMsg, AlertMsg
 from .sidecar_runtime import SidecarRuntime
 

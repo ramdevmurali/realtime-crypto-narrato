@@ -11,7 +11,8 @@ from ..config import settings
 from ..logging_config import get_logger
 from ..runtime_interface import RuntimeService
 from ..io.db import init_pool
-from ..utils import simple_sentiment, with_retries, now_utc, parse_iso_datetime
+from ..utils import simple_sentiment, now_utc, parse_iso_datetime
+from ..retry import with_retries
 from ..io.models.messages import NewsMsg, EnrichedNewsMsg
 from ..metrics import MetricsRegistry, get_metrics
 from . import sentiment_model

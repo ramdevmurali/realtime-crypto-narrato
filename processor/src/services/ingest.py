@@ -8,7 +8,8 @@ from dateutil import parser as dateparser
 
 from ..config import settings
 from ..io.db import insert_headline
-from ..utils import now_utc, simple_sentiment, sleep_backoff, with_retries
+from ..utils import now_utc, simple_sentiment
+from ..retry import sleep_backoff, with_retries
 from ..logging_config import get_logger
 from ..metrics import get_metrics
 from ..io.models.messages import PriceMsg, NewsMsg

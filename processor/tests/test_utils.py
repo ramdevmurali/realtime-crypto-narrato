@@ -3,6 +3,7 @@ from datetime import datetime
 import pytest
 
 from processor.src import utils
+from processor.src import retry as retry_module
 from processor.src import metrics as metrics_module
 
 
@@ -21,10 +22,10 @@ async def test_with_retries_retries_and_increments_metrics(monkeypatch):
     async def no_sleep(*_args, **_kwargs):
         return None
 
-    monkeypatch.setattr(utils, "sleep_backoff", no_sleep)
-    monkeypatch.setattr(utils.settings, "retry_max_attempts", 3)
+    monkeypatch.setattr(retry_module, "sleep_backoff", no_sleep)
+    monkeypatch.setattr(retry_module.settings, "retry_max_attempts", 3)
 
-    result = await utils.with_retries(flaky, op="test_op")
+    result = await retry_module.with_retries(flaky, op="test_op")
     assert result == "ok"
     assert calls["count"] == 3
 
@@ -43,11 +44,11 @@ async def test_with_retries_raises_after_max_attempts(monkeypatch):
     async def no_sleep(*_args, **_kwargs):
         return None
 
-    monkeypatch.setattr(utils, "sleep_backoff", no_sleep)
-    monkeypatch.setattr(utils.settings, "retry_max_attempts", 2)
+    monkeypatch.setattr(retry_module, "sleep_backoff", no_sleep)
+    monkeypatch.setattr(retry_module.settings, "retry_max_attempts", 2)
 
     with pytest.raises(RuntimeError):
-        await utils.with_retries(always_fail, op="test_op")
+        await retry_module.with_retries(always_fail, op="test_op")
 
     counters = metrics_module.get_metrics().snapshot()["counters"]
     assert counters.get("processor.retry.total") == 2
@@ -62,13 +63,13 @@ async def test_sleep_backoff_uses_jitter_bounds(monkeypatch):
         captured.append(value)
         return None
 
-    monkeypatch.setattr(utils.settings, "retry_backoff_base_sec", 1)
-    monkeypatch.setattr(utils.settings, "retry_backoff_cap_sec", 4)
-    monkeypatch.setattr(utils.settings, "retry_jitter_min", 0.5)
-    monkeypatch.setattr(utils.settings, "retry_jitter_max", 1.5)
-    monkeypatch.setattr(utils.asyncio, "sleep", fake_sleep)
+    monkeypatch.setattr(retry_module.settings, "retry_backoff_base_sec", 1)
+    monkeypatch.setattr(retry_module.settings, "retry_backoff_cap_sec", 4)
+    monkeypatch.setattr(retry_module.settings, "retry_jitter_min", 0.5)
+    monkeypatch.setattr(retry_module.settings, "retry_jitter_max", 1.5)
+    monkeypatch.setattr(retry_module.asyncio, "sleep", fake_sleep)
 
-    await utils.sleep_backoff(attempt=1)
+    await retry_module.sleep_backoff(attempt=1)
 
     assert len(captured) == 1
     wait = captured[0]

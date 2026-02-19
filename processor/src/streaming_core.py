@@ -11,7 +11,7 @@ from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
 from .config import settings
 from .io.db import init_pool, close_pool
 from .services.ingest import price_ingest_task, news_ingest_task
-from .utils import with_retries
+from .retry import with_retries
 from .logging_config import get_logger
 from .services.runtime import log_startup_config
 from .services.health import healthcheck

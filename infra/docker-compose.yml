@@ -19,6 +19,11 @@ services:
       - redpanda-data:/var/lib/redpanda/data
     networks:
       - streaming
+    healthcheck:
+      test: ["CMD", "rpk", "cluster", "info", "--brokers=redpanda:29092"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   timescaledb:
     image: timescale/timescaledb:2.15.0-pg14
@@ -33,6 +38,11 @@ services:
       - ts-data:/var/lib/postgresql/data
     networks:
       - streaming
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d anomalies"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   redis:
     image: redis:7-alpine
@@ -41,13 +51,22 @@ services:
       - "6379:6379"
     networks:
       - streaming
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   backend:
     build: ../backend
     container_name: backend
     depends_on:
-      - redpanda
-      - timescaledb
+      redpanda:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       DATABASE_URL: ${DATABASE_URL}
       KAFKA_BROKERS: ${KAFKA_BROKERS}
@@ -60,6 +79,11 @@ services:
       - "8000:8000"
     networks:
       - streaming
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()\""]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   processor:
     build:
@@ -68,8 +92,12 @@ services:
         SENTIMENT_LIGHT_RUNTIME: ${SENTIMENT_LIGHT_RUNTIME:-false}
     container_name: processor
     depends_on:
-      - redpanda
-      - timescaledb
+      redpanda:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       DATABASE_URL: ${DATABASE_URL}
       KAFKA_BROKERS: ${KAFKA_BROKERS}
@@ -100,8 +128,10 @@ services:
         SENTIMENT_LIGHT_RUNTIME: ${SENTIMENT_LIGHT_RUNTIME:-false}
     container_name: summary-sidecar
     depends_on:
-      - redpanda
-      - timescaledb
+      redpanda:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
     environment:
       DATABASE_URL: ${DATABASE_URL}
       KAFKA_BROKERS: ${KAFKA_BROKERS}
@@ -125,8 +155,10 @@ services:
         SENTIMENT_LIGHT_RUNTIME: ${SENTIMENT_LIGHT_RUNTIME:-false}
     container_name: sentiment-sidecar
     depends_on:
-      - redpanda
-      - timescaledb
+      redpanda:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
     environment:
       DATABASE_URL: ${DATABASE_URL}
       KAFKA_BROKERS: ${KAFKA_BROKERS}
@@ -153,7 +185,8 @@ services:
     build: ../frontend
     container_name: frontend
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     environment:
       NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE}
       NEXT_PUBLIC_WS_BASE: ${NEXT_PUBLIC_WS_BASE}

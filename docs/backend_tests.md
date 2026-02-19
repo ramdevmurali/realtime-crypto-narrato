@@ -18,7 +18,8 @@ From `backend/`:
 PYTHONPATH=.. .venv/bin/python -m pytest tests_unit tests_integration
 ```
 Integration tests require a live backend server at `http://localhost:8000`
-(run uvicorn separately), plus a running TimescaleDB with schema applied.
+(run uvicorn separately). If uvicorn isn't running, you'll hit `httpx.ConnectError`.
+They also require a running TimescaleDB with schema applied.
 Backend config loads `backend/.env` first, then `infra/.env` (set local DB URL in `backend/.env`).
 
 Minimal runbook:

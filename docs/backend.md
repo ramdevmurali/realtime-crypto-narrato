@@ -9,8 +9,10 @@
 - `GET /health` — pings DB (`SELECT 1`); 200 on OK, 503 on failure.
 - `GET /prices?symbol=&limit=` — latest ticks (desc). Params: `symbol` (required, case-insensitive), `limit` (default 200).
 - `GET /metrics/latest?symbol=` — most recent rollup for a symbol; 404 if none.
-- `GET /headlines?limit=` — recent headlines with sentiment.
-- `GET /alerts?limit=` — recent anomalies (symbol, window, direction, return, threshold, summary, headline, sentiment).
+- `GET /headlines?limit=&since=` — recent headlines with sentiment. Params: `limit` (default 20), `since` (optional ISO 8601).
+- `GET /headlines/stream?limit=&interval=` — SSE stream of recent headlines (polls DB).
+- `GET /alerts?limit=&since=` — recent anomalies (symbol, window, direction, return, threshold, summary, headline, sentiment). Params: `limit` (default 20), `since` (optional ISO 8601).
+- `GET /alerts/stream?limit=&interval=` — SSE stream of recent alerts (polls DB).
 
 ## Config
 - `backend/app/config.py` via pydantic-settings.

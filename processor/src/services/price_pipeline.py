@@ -72,7 +72,7 @@ async def persist_and_publish_price(proc: ProcessorState, symbol: str, ts, metri
             get_metrics("processor").inc("metric_insert_failed")
             raise PipelineError("insert_metric", exc) from exc
     try:
-        await check_anomalies(proc, symbol, ts, metrics or {})
+        await check_anomalies(proc, symbol, ts, metrics or {}, publisher=proc.producer)
     except Exception as exc:
         proc.log.error("anomaly_check_failed", extra={"error": str(exc), "symbol": symbol})
         get_metrics("processor").inc("anomaly_check_failed")

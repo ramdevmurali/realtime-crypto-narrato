@@ -26,6 +26,7 @@ class FakeProc:
             )
         )
         self.log = FakeLog()
+        self.producer = None
 
 
 def test_compute_price_metrics_no_db_side_effects(monkeypatch):
@@ -57,7 +58,7 @@ async def test_persist_and_publish_price_handles_none_metrics(monkeypatch):
 
     calls = {"anomaly": None}
 
-    async def fake_check_anomalies(_proc, _symbol, _ts, metrics):
+    async def fake_check_anomalies(_proc, _symbol, _ts, metrics, **_kwargs):
         calls["anomaly"] = metrics
 
     monkeypatch.setattr(price_pipeline, "insert_metric", fake_insert_metric)

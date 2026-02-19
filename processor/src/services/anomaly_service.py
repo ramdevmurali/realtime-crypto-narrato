@@ -9,7 +9,7 @@ from ..io.db import insert_anomaly, fetch_anomaly_alert_published, mark_anomaly_
 from ..utils import llm_summarize, with_retries
 from ..logging_config import get_logger
 from ..io.models.messages import SummaryRequestMsg, AlertMsg
-from ..processor_state import ProcessorState
+from ..processor_state import ProcessorState, Publisher
 
 
 def _get_headline_context(processor: ProcessorState) -> HeadlineContext:
@@ -28,10 +28,15 @@ def _get_headline_context(processor: ProcessorState) -> HeadlineContext:
     return HeadlineContext(headline=headline, sentiment=sentiment, headline_ts=headline_ts)
 
 
-async def check_anomalies(processor: ProcessorState, symbol: str, ts: datetime, metrics):
+async def check_anomalies(
+    processor: ProcessorState,
+    symbol: str,
+    ts: datetime,
+    metrics,
+    publisher: Publisher | None,
+):
     """Detect and publish anomalies for a symbol at time ts based on metrics."""
-    producer = processor.producer
-    assert producer
+    assert publisher
     log = getattr(processor, "log", get_logger(__name__))
     if not hasattr(processor, "alerts_emitted"):
         processor.alerts_emitted = 0
@@ -124,14 +129,14 @@ async def check_anomalies(processor: ProcessorState, symbol: str, ts: datetime, 
         )
 
         await with_retries(
-            producer.send_and_wait,
+            publisher.send_and_wait,
             settings.summaries_topic,
             summary_req.to_bytes(),
             log=log,
             op="send_summary_request",
         )
         await with_retries(
-            producer.send_and_wait,
+            publisher.send_and_wait,
             settings.alerts_topic,
             alert_msg.to_bytes(),
             log=log,

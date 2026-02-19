@@ -123,6 +123,75 @@ async def _run_summary_record(
 
 
 @pytest.mark.asyncio
+async def test_commit_message_uses_non_null_metadata():
+    class FakeConsumer:
+        def __init__(self):
+            self.calls = []
+
+        async def commit(self, offsets):
+            self.calls.append(offsets)
+
+    class FakeMsg:
+        topic = "summaries"
+        partition = 2
+        offset = 41
+
+    class FakeLog:
+        def __init__(self):
+            self.warnings = []
+
+        def warning(self, key, extra=None):
+            self.warnings.append((key, extra))
+
+    consumer = FakeConsumer()
+    log = FakeLog()
+
+    await summary_sidecar._commit_message(consumer, FakeMsg(), log)
+
+    assert len(consumer.calls) == 1
+    commit_map = consumer.calls[0]
+    assert len(commit_map) == 1
+    tp, offset_meta = next(iter(commit_map.items()))
+    assert tp.topic == "summaries"
+    assert tp.partition == 2
+    assert offset_meta.offset == 42
+    assert offset_meta.metadata == ""
+    assert log.warnings == []
+
+
+@pytest.mark.asyncio
+async def test_commit_message_logs_warning_on_failure():
+    class FailingConsumer:
+        async def commit(self, offsets):
+            raise RuntimeError("commit boom")
+
+    class FakeMsg:
+        topic = "summaries"
+        partition = 1
+        offset = 10
+
+    class FakeLog:
+        def __init__(self):
+            self.warnings = []
+
+        def warning(self, key, extra=None):
+            self.warnings.append((key, extra))
+
+    log = FakeLog()
+
+    await summary_sidecar._commit_message(FailingConsumer(), FakeMsg(), log)
+
+    assert len(log.warnings) == 1
+    key, extra = log.warnings[0]
+    assert key == "summary_commit_failed"
+    assert extra["topic"] == "summaries"
+    assert extra["partition"] == 1
+    assert extra["offset"] == 10
+    assert extra["error_type"] == "RuntimeError"
+    assert "commit boom" in extra["error"]
+
+
+@pytest.mark.asyncio
 async def test_persist_and_publish_summary(monkeypatch):
     payload = {
         "time": "2026-01-27T12:00:00+00:00",

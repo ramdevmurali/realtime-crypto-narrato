@@ -208,9 +208,18 @@ async def publish_summary_alert(payload, summary: str, producer, log, event_id: 
 async def _commit_message(consumer, msg, log):
     tp = TopicPartition(msg.topic, msg.partition)
     try:
-        await consumer.commit({tp: OffsetAndMetadata(msg.offset + 1, None)})
+        await consumer.commit({tp: OffsetAndMetadata(msg.offset + 1, "")})
     except Exception as exc:
-        log.warning("summary_commit_failed", extra={"error": str(exc), "offset": msg.offset})
+        log.warning(
+            "summary_commit_failed",
+            extra={
+                "topic": msg.topic,
+                "partition": msg.partition,
+                "offset": msg.offset,
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+            },
+        )
 
 
 async def process_summary_record(msg, consumer, producer, pool, log, semaphore: asyncio.Semaphore):

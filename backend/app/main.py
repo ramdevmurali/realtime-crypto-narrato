@@ -1,5 +1,4 @@
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -10,21 +9,9 @@ import logging
 from .config import settings
 from . import db
 from .streams import alerts_event_generator, headlines_event_generator
+from .time_utils import parse_since
 
 logger = logging.getLogger(__name__)
-
-
-def _parse_since(since: str) -> datetime:
-    value = since.strip()
-    if value.endswith("Z"):
-        value = value[:-1] + "+00:00"
-    try:
-        parsed = datetime.fromisoformat(value)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail="invalid_since") from exc
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -73,7 +60,7 @@ async def get_headlines(
     limit: int = Query(20, ge=1, le=200),
     since: str | None = Query(None),
 ):
-    since_dt = _parse_since(since) if since else None
+    since_dt = parse_since(since) if since else None
     rows = await db.fetch_headlines(limit, since=since_dt)
     return [
         {
@@ -108,7 +95,7 @@ async def get_alerts(
     limit: int = Query(20, ge=1, le=200),
     since: str | None = Query(None),
 ):
-    since_dt = _parse_since(since) if since else None
+    since_dt = parse_since(since) if since else None
     rows = await db.fetch_alerts(limit, since=since_dt)
     return [
         {

@@ -43,7 +43,7 @@ flowchart LR
   BIN[Binance WS] --> P[processor]
   RSS[RSS feeds] --> P
 
-  subgraph INFRA[Runtime Services (docker compose)]
+  subgraph INFRA["Runtime Services - docker compose"]
     RP[redpanda]
     TS[timescaledb]
     R[redis]
@@ -72,13 +72,13 @@ flowchart LR
 ## Diagram B — Happy-Path Dataflow
 ```mermaid
 flowchart LR
-  subgraph EXT[External]
+  subgraph EXT["External"]
     BIN[Binance WS]
     RSS[RSS feeds]
     U[User]
   end
 
-  subgraph PROC[Processor Core]
+  subgraph PROC["Processor Core"]
     PRICE_ING[price_ingest_task]
     NEWS_ING[news_ingest_task]
     PRICE_CONS[consume_prices]
@@ -86,13 +86,13 @@ flowchart LR
     ANOM[anomaly_service]
   end
 
-  subgraph SIDE[Sidecars]
+  subgraph SIDE["Sidecars"]
     SUM[summary-sidecar]
     SENT[sentiment-sidecar]
     LLM[LLM provider]
   end
 
-  subgraph KAFKA[Redpanda / Kafka]
+  subgraph KAFKA["Redpanda / Kafka"]
     KPR[(prices)]
     KNEWS[(news)]
     KENR[(news-enriched)]
@@ -100,14 +100,14 @@ flowchart LR
     KALERT[(alerts)]
   end
 
-  subgraph DB[TimescaleDB]
+  subgraph DB["TimescaleDB"]
     TPR[(prices table)]
     TMET[(metrics table)]
     TH[(headlines table)]
     TAN[(anomalies table)]
   end
 
-  subgraph API[Backend API]
+  subgraph API["Backend API"]
     BE[REST + SSE]
   end
 
@@ -146,14 +146,14 @@ flowchart LR
 ## Diagram C — Failure / Recovery Paths
 ```mermaid
 flowchart LR
-  subgraph FAIL[Failure paths]
+  subgraph FAIL["Failure paths"]
     PC[price_consumer]
     SS[summary-sidecar]
     NS[sentiment-sidecar]
     B[(summary DLQ local buffer JSONL)]
   end
 
-  subgraph KAFKA[Kafka DLQ Topics]
+  subgraph KAFKA["Kafka DLQ Topics"]
     KPD[(prices-deadletter)]
     KND[(news-deadletter)]
     KSD[(summaries-deadletter)]
@@ -161,11 +161,11 @@ flowchart LR
     KAL[(alerts)]
   end
 
-  subgraph DB[TimescaleDB]
+  subgraph DB["TimescaleDB"]
     TAN[(anomalies table)]
   end
 
-  subgraph OPS[Ops / Recovery]
+  subgraph OPS["Ops / Recovery"]
     DEPLOY[make deploy-processor]
     VERIFY[make verify-runtime]
     PROBE[scripts/probe_anomaly_path.py]

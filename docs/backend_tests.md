@@ -17,6 +17,14 @@ From `backend/`:
 ```
 PYTHONPATH=.. .venv/bin/python -m pytest tests_unit tests_integration
 ```
+Integration tests require a live backend server at `http://localhost:8000`
+(run uvicorn separately), plus a running TimescaleDB with schema applied.
+
+Minimal runbook:
+1) Start Timescale (e.g., `docker compose -f infra/docker-compose.yml up -d timescaledb`)
+2) Apply migrations: `PYTHONPATH=processor/src:. .venv-backend/bin/python scripts/migrate_db.py`
+3) Start uvicorn: `cd backend && ../.venv-backend/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000`
+4) Run tests: `./.venv-backend/bin/python -m pytest tests_unit tests_integration`
 
 ## Integration data seeded
 - Symbol `testcoin` with sample prices, metrics (e.g., return_1m ~0.05), headline (sentiment -0.2), and alert (summary "test summary").

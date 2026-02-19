@@ -21,7 +21,7 @@
 - `domain/metrics.py` — computes rolling returns/vol per symbol from PriceWindow; emits raw return z-scores, EWMA-smoothed return z-scores, volatility z-scores + spike flags, and 5th/95th return percentiles per window.
 - `domain/anomaly.py` — **pure** anomaly decision logic (threshold checks, rate-limit, direction). Side effects live in `services/anomaly_service.py`.
 - `services/ingest.py` — tasks:
-  - `price_ingest_task`: Binance WS → Kafka `prices` → Timescale `prices`.
+  - `price_ingest_task`: Binance WS → Kafka `prices` (Timescale writes happen in the consumer/pipeline).
   - `news_ingest_task`: RSS → dedupe → sentiment stub → Kafka `news` → Timescale `headlines`.
   - Includes backoff/jitter, counters, graceful cancel.
 - `services/price_consumer.py` — Kafka consume loop + commit policy.

@@ -39,6 +39,7 @@ curl http://localhost:8000/health
 Local dev (venv):
 ```
 cd backend
+cp .env.example .env  # set local DATABASE_URL if needed
 PYTHONPATH=.. .venv/bin/uvicorn app.main:app --reload
 ```
 

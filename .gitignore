@@ -3,6 +3,7 @@ infra/.env
 __pycache__/
 *.pyc
 .env.*
+!backend/.env.example
 TODO.md
 .TODO.md
 .venv/

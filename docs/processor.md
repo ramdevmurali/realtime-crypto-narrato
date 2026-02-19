@@ -92,6 +92,9 @@ Non-goals for now:
 - `services/sentiment_sidecar.py`: inputs — Kafka `news` (headlines); outputs — Timescale `headlines` sentiment overwrite, Kafka `news-enriched`.
 
 ## How to run
+Run migrations before starting services:
+`PYTHONPATH=processor/src:. .venv/bin/python scripts/migrate_db.py`
+
 ```
 cd infra
 docker compose up -d redpanda timescaledb processor summary-sidecar sentiment-sidecar backend   # containers use PYTHONPATH=/app

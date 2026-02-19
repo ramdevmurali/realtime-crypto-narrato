@@ -14,6 +14,8 @@
 
 ## Modules
 - `config.py` — pydantic settings (DB URL, Kafka brokers/topics, Binance stream, symbols, RSS, thresholds, LLM keys). CSV env parsing for brokers/symbols.
+  - Supports deterministic diagnostics mode via `ANOMALY_TEST_MODE`, `ANOMALY_TEST_THRESHOLD`, `ANOMALY_TEST_COOLDOWN_SEC`.
+  - Supports multi-feed news polling via `NEWS_RSS_URLS` (fallback to `NEWS_RSS`).
   - DLQ knob: `price_dlq_topic` (default `prices-deadletter`).
 - `io/db.py` — asyncpg pool; creates Timescale hypertables (prices, metrics, headlines, anomalies); insert helpers.
 - `utils.py` — now_utc, simple_sentiment stub, llm_summarize (stub/OpenAI/Gemini), backoff helpers (`sleep_backoff`, `with_retries`).
@@ -22,7 +24,8 @@
 - `domain/anomaly.py` — **pure** anomaly decision logic (threshold checks, rate-limit, direction). Side effects live in `services/anomaly_service.py`.
 - `services/ingest.py` — tasks:
   - `price_ingest_task`: Binance WS → Kafka `prices` (Timescale writes happen in the consumer/pipeline).
-  - `news_ingest_task`: RSS → dedupe → sentiment stub → Kafka `news` → Timescale `headlines`.
+  - `news_ingest_task`: one or many RSS feeds → dedupe → sentiment stub → Kafka `news` → Timescale `headlines`.
+    - Freshness SLO visibility: `HEADLINE_STALE_WARN_SEC`, `NEWS_STALE_LOG_EVERY`.
   - Includes backoff/jitter, counters, graceful cancel.
 - `services/price_consumer.py` — Kafka consume loop + commit policy.
 - `services/price_pipeline.py` — DB + metrics + anomaly pipeline.
@@ -49,6 +52,8 @@ Terminology note: the `metrics` table stores **price metrics** (returns/vol/z/pe
 
 ## Alert path and summaries
 - Threshold check & cooldown happen in `domain/anomaly.py`; if tripped, the alert is persisted to Timescale (in `anomalies`) and published to the Kafka `alerts` topic. These represent the same event across DB and Kafka.
+- Normal mode uses static thresholds (`ALERT_THRESHOLD_1M/5M/15M`) and `ANOMALY_COOLDOWN_SEC`.
+- Test mode is explicit and off by default: when `ANOMALY_TEST_MODE=true`, thresholds are overridden by `ANOMALY_TEST_THRESHOLD` and cooldown by `ANOMALY_TEST_COOLDOWN_SEC`.
 - The processor no longer calls the LLM in the hot path. It publishes a **summary request** message to the `summaries` topic with `{time, symbol, window, direction, ret, threshold, headline, sentiment}`. Alerts still carry the base/stub summary.
   - Note: the Kafka `summaries` topic contains **requests**, not completed summaries.
 - The summary sidecar consumes `summaries`, calls the configured LLM, and backfills richer summaries asynchronously.
@@ -79,6 +84,20 @@ Note: event_id is deterministic and collision‑resistant; intended for dedupe/t
 
 Sentiment fallback behavior: if the sentiment sidecar is down or errors, the raw `news` topic remains valid
 and carries the stub sentiment; consumers can continue using `news` until `news-enriched` is available.
+
+## Anomaly observability
+Processor telemetry includes explicit anomaly-path decisions (namespaced under `processor.`):
+- `processor.anomaly_candidates`
+- `processor.anomaly_emitted`
+- `processor.anomaly_suppressed_threshold`
+- `processor.anomaly_suppressed_cooldown`
+- `processor.anomaly_emitted_without_headline`
+- `processor.news_entries_ingested`
+- `processor.news_feed_errors`
+- `processor.news_stale_polls`
+- rolling `processor.latest_headline_age_sec`
+
+Decision logs are sampled (`anomaly_decision_sample`) to avoid per-tick spam and still explain emit/suppress reasons.
 
 Non-goals for now:
 - No schema registry (JSON/Avro) yet; models + tests enforce contracts.
@@ -130,6 +149,11 @@ Note: default replays to `summaries` (may re‑LLM). To avoid re‑LLM, replay t
 Warning: replaying to `summaries` will re‑trigger the LLM and can duplicate alerts.
 Prefer `--topic summaries-deadletter` unless you explicitly want re‑LLM.
 
+Deterministic anomaly probe (no config edits required):
+```
+PYTHONPATH=processor/src:. .venv/bin/python scripts/probe_anomaly_path.py --check-summaries
+```
+
 SSE stream for headlines (rudimentary sentiment):
 ```
 curl -N 'http://localhost:8000/headlines/stream?limit=5&interval=2'
@@ -179,6 +203,8 @@ Examples of critical knobs:
 - `ENABLE_DB_INIT` (used by `init_tables()` in dev/scripts; processor no longer runs DDL at startup)
 - `KAFKA_AUTO_OFFSET_RESET`, `PROCESSOR_CONSUMER_GROUP`
 - `LATE_PRICE_TOLERANCE_SEC`, `ANOMALY_COOLDOWN_SEC`
+- `ANOMALY_TEST_MODE`, `ANOMALY_TEST_THRESHOLD`, `ANOMALY_TEST_COOLDOWN_SEC`
+- `NEWS_RSS`, `NEWS_RSS_URLS`, `HEADLINE_STALE_WARN_SEC`
 - `PROCESSOR_METRICS_PORT`, `SUMMARY_METRICS_PORT`
 - `SENTIMENT_PROVIDER`, `SENTIMENT_MODEL_PATH`
 - `LLM_MAX_TOKENS`, `LLM_TEMPERATURE`

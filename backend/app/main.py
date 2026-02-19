@@ -5,12 +5,11 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import StreamingResponse
 import uvicorn
 
-import asyncio
-import json
 import logging
 
 from .config import settings
 from . import db
+from .streams import alerts_event_generator, headlines_event_generator
 
 logger = logging.getLogger(__name__)
 
@@ -93,74 +92,7 @@ async def stream_headlines(
     limit: int = Query(5, ge=1, le=50),
     interval: float = Query(2.0, ge=0.5),
 ):
-    async def event_generator():
-        backoff = 1.0
-        while True:
-            try:
-                rows = await db.fetch_headlines(limit)
-                payload = {
-                    "items": [
-                        {
-                            "time": r["time"].isoformat()
-                            if hasattr(r["time"], "isoformat")
-                            else str(r["time"]),
-                            "title": r["title"],
-                            "url": r["url"],
-                            "source": r["source"],
-                            "sentiment": r["sentiment"],
-                        }
-                        for r in rows
-                    ],
-                    "count": len(rows),
-                }
-                yield f"data: {json.dumps(payload)}\n\n"
-                backoff = 1.0
-                await asyncio.sleep(interval)
-            except asyncio.CancelledError:
-                logger.info("headlines_stream_cancelled")
-                break
-            except Exception as exc:
-                logger.warning("headlines_stream_error: %s", exc)
-                await asyncio.sleep(backoff)
-                backoff = min(backoff * 2.0, 30.0)
-
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
-
-
-async def _alerts_event_generator(limit: int, interval: float):
-    backoff = 1.0
-    while True:
-        try:
-            rows = await db.fetch_alerts(limit)
-            payload = {
-                "items": [
-                    {
-                        "time": r["time"].isoformat()
-                        if hasattr(r["time"], "isoformat")
-                        else str(r["time"]),
-                        "symbol": r["symbol"],
-                        "window": r["window"],
-                        "direction": r["direction"],
-                        "return": r["return"],
-                        "threshold": r["threshold"],
-                        "summary": r["summary"],
-                        "headline": r["headline"],
-                        "sentiment": r["sentiment"],
-                    }
-                    for r in rows
-                ],
-                "count": len(rows),
-            }
-            yield f"data: {json.dumps(payload)}\n\n"
-            backoff = 1.0
-            await asyncio.sleep(interval)
-        except asyncio.CancelledError:
-            logger.info("alerts_stream_cancelled")
-            break
-        except Exception as exc:
-            logger.warning("alerts_stream_error: %s", exc)
-            await asyncio.sleep(backoff)
-            backoff = min(backoff * 2.0, 30.0)
+    return StreamingResponse(headlines_event_generator(limit, interval), media_type="text/event-stream")
 
 
 @app.get("/alerts/stream")
@@ -168,7 +100,7 @@ async def stream_alerts(
     limit: int = Query(5, ge=1, le=50),
     interval: float = Query(2.0, ge=0.5),
 ):
-    return StreamingResponse(_alerts_event_generator(limit, interval), media_type="text/event-stream")
+    return StreamingResponse(alerts_event_generator(limit, interval), media_type="text/event-stream")
 
 
 @app.get("/alerts")

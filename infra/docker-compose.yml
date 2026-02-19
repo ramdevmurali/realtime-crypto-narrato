@@ -2,6 +2,7 @@ services:
   redpanda:
     image: redpandadata/redpanda:v23.3.12
     container_name: redpanda
+    restart: unless-stopped
     command:
       - redpanda start
       - --overprovisioned
@@ -28,6 +29,7 @@ services:
   timescaledb:
     image: timescale/timescaledb:2.15.0-pg14
     container_name: timescaledb
+    restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -47,6 +49,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: redis
+    restart: unless-stopped
     ports:
       - "6379:6379"
     networks:
@@ -60,6 +63,7 @@ services:
   backend:
     build: ../backend
     container_name: backend
+    restart: unless-stopped
     depends_on:
       redpanda:
         condition: service_healthy
@@ -91,6 +95,7 @@ services:
       args:
         SENTIMENT_LIGHT_RUNTIME: ${SENTIMENT_LIGHT_RUNTIME:-false}
     container_name: processor
+    restart: unless-stopped
     depends_on:
       redpanda:
         condition: service_healthy
@@ -127,6 +132,7 @@ services:
       args:
         SENTIMENT_LIGHT_RUNTIME: ${SENTIMENT_LIGHT_RUNTIME:-false}
     container_name: summary-sidecar
+    restart: unless-stopped
     depends_on:
       redpanda:
         condition: service_healthy
@@ -154,6 +160,7 @@ services:
       args:
         SENTIMENT_LIGHT_RUNTIME: ${SENTIMENT_LIGHT_RUNTIME:-false}
     container_name: sentiment-sidecar
+    restart: unless-stopped
     depends_on:
       redpanda:
         condition: service_healthy
@@ -184,6 +191,7 @@ services:
   frontend:
     build: ../frontend
     container_name: frontend
+    restart: unless-stopped
     depends_on:
       backend:
         condition: service_healthy

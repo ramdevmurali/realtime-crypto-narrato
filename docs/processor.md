@@ -19,7 +19,7 @@
 - `utils.py` — now_utc, simple_sentiment stub, llm_summarize (stub/OpenAI/Gemini), backoff helpers (`sleep_backoff`, `with_retries`).
 - `domain/windows.py` — in-memory PriceWindow: add/prune (max window + resample step), strict-window returns/vol, keeps smoothed z-score state. Same-timestamp updates overwrite the last price (no duplicate points).
 - `domain/metrics.py` — computes rolling returns/vol per symbol from PriceWindow; emits raw return z-scores, EWMA-smoothed return z-scores, volatility z-scores + spike flags, and 5th/95th return percentiles per window.
-- `domain/anomaly.py` — threshold checks, rate-limit (60s), direction, summarizes, persists + publishes alerts.
+- `domain/anomaly.py` — **pure** anomaly decision logic (threshold checks, rate-limit, direction). Side effects live in `services/anomaly_service.py`.
 - `services/ingest.py` — tasks:
   - `price_ingest_task`: Binance WS → Kafka `prices` → Timescale `prices`.
   - `news_ingest_task`: RSS → dedupe → sentiment stub → Kafka `news` → Timescale `headlines`.
@@ -32,7 +32,7 @@
 - `services/sentiment_model.py` — sentiment inference wrapper (stub/onnx).
 - `services/sentiment_sidecar.py` — enriches news sentiment and publishes `news-enriched`.
 - `streaming_core.py` — orchestrator + shared state.
-- `app.py` (entrypoint: `python -m src.app`) — thin entrypoint for `StreamProcessor`.
+- `app.py` (entrypoint: `PYTHONPATH=processor/src:. .venv/bin/python -m app`) — thin entrypoint for `StreamProcessor`.
 
 Note: legacy folders like `processor/src/models` and `processor/src/processor/services` are removed; use `io/models` and `services/` instead.
 
@@ -100,7 +100,7 @@ Local/tests PYTHONPATH: `PYTHONPATH=processor/src:.`
 
 Sentiment sidecar (local):
 ```
-PYTHONPATH=processor/src:. .venv/bin/python -m src.services.sentiment_sidecar
+PYTHONPATH=processor/src:. .venv/bin/python -m services.sentiment_sidecar
 ```
 
 Sentiment model assets (local ONNX):

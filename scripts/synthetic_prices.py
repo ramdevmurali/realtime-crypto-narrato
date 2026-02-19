@@ -5,7 +5,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(os.path.join(ROOT, ".."))  # so we can import src.* when /app is PYTHONPATH
+sys.path.append(os.path.join(ROOT, "..", "processor", "src"))  # allow imports from processor/src
 
 from src.domain.windows import PriceWindow  # type: ignore
 from src.domain.metrics import compute_metrics  # type: ignore

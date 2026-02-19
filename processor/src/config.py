@@ -1,7 +1,7 @@
 from typing import List
 from datetime import timedelta
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 
 
 def _csv(val: str | None, default: List[str]) -> List[str]:
@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     alert_threshold_1m: float = 0.05
     alert_threshold_5m: float = 0.08
     alert_threshold_15m: float = 0.12
+    anomaly_test_mode: bool = False
+    anomaly_test_threshold: float = 0.001
+    anomaly_test_cooldown_sec: int = 0
 
     window_labels_raw: str = "1m,5m,15m"
     late_price_tolerance_sec: int = 0
@@ -64,6 +67,9 @@ class Settings(BaseSettings):
     news_backoff_cap_sec: float = 90.0
     news_poll_interval_sec: int = 60
     news_batch_limit: int = 20
+    news_rss_urls_raw: str = Field(default="", validation_alias="NEWS_RSS_URLS")
+    headline_stale_warn_sec: int = 300
+    news_stale_log_every: int = 10
     retry_max_attempts: int = 3
     retry_backoff_base_sec: float = 1.0
     retry_backoff_cap_sec: float = 30.0
@@ -143,6 +149,8 @@ class Settings(BaseSettings):
         # allow CSV env overrides for symbols
         if 'SYMBOLS' in values:
             values['symbols_raw'] = values.get('SYMBOLS')
+        if 'NEWS_RSS_URLS' in values:
+            values['news_rss_urls_raw'] = values.get('NEWS_RSS_URLS')
         super().__init__(**values)
 
     @field_validator(
@@ -180,6 +188,8 @@ class Settings(BaseSettings):
         "news_backoff_cap_sec",
         "news_poll_interval_sec",
         "news_batch_limit",
+        "headline_stale_warn_sec",
+        "news_stale_log_every",
         "summary_llm_concurrency",
         "sentiment_poll_timeout_ms",
         "task_restart_backoff_sec",
@@ -197,6 +207,7 @@ class Settings(BaseSettings):
         "sentiment_batch_size",
         "sentiment_max_seq_len",
         "sentiment_fallback_log_every",
+        "anomaly_test_threshold",
     )
     @classmethod
     def _positive(cls, v):
@@ -204,7 +215,7 @@ class Settings(BaseSettings):
             raise ValueError("must be positive")
         return v
 
-    @field_validator("late_price_tolerance_sec")
+    @field_validator("late_price_tolerance_sec", "anomaly_test_cooldown_sec")
     @classmethod
     def _non_negative(cls, v):
         if v < 0:
@@ -266,6 +277,23 @@ class Settings(BaseSettings):
             return v
         if v <= 0:
             raise ValueError("must be positive")
+        return v
+
+    @field_validator(
+        "retention_prices_days",
+        "retention_metrics_days",
+        "retention_headlines_days",
+        "retention_anomalies_days",
+        "sentiment_max_latency_ms",
+        "summary_metrics_port",
+        "sentiment_metrics_port",
+        "processor_metrics_port",
+        mode="before",
+    )
+    @classmethod
+    def _empty_optional_to_none(cls, v):
+        if v in ("", None):
+            return None
         return v
 
     @field_validator(
@@ -353,11 +381,20 @@ class Settings(BaseSettings):
     @property
     def symbols(self) -> List[str]:
         return _csv(self.symbols_raw, ["btcusdt", "ethusdt"])
+
+    @property
+    def news_rss_urls(self) -> List[str]:
+        urls = _csv(self.news_rss_urls_raw, [])
+        if urls:
+            return urls
+        return [self.news_rss]
 settings = Settings()
 
 
 def get_thresholds():
     """Return alert thresholds per window."""
+    if settings.anomaly_test_mode:
+        return {label: settings.anomaly_test_threshold for label in get_windows().keys()}
     return {
         "1m": settings.alert_threshold_1m,
         "5m": settings.alert_threshold_5m,

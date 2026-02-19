@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 import asyncio
 
 from ..config import settings, get_thresholds
@@ -9,6 +9,7 @@ from ..io.db import insert_anomaly, fetch_anomaly_alert_published, mark_anomaly_
 from ..llm import llm_summarize
 from ..retry import with_retries
 from ..logging_config import get_logger
+from ..metrics import get_metrics
 from ..io.models.messages import SummaryRequestMsg, AlertMsg
 from ..processor_state import ProcessorState, Publisher
 
@@ -41,9 +42,43 @@ async def check_anomalies(
     log = getattr(processor, "log", get_logger(__name__))
     if not hasattr(processor, "alerts_emitted"):
         processor.alerts_emitted = 0
+    if not hasattr(processor, "anomaly_decisions_seen"):
+        processor.anomaly_decisions_seen = 0
+    telemetry = get_metrics("processor")
 
     headline_ctx = _get_headline_context(processor)
     thresholds = get_thresholds()
+    cooldown_sec = settings.anomaly_test_cooldown_sec if settings.anomaly_test_mode else settings.anomaly_cooldown_sec
+    for label, threshold in thresholds.items():
+        ret = metrics.get(f"return_{label}") if metrics else None
+        if ret is None:
+            continue
+        telemetry.inc("anomaly_candidates")
+        decision = "emit"
+        if abs(ret) < threshold:
+            telemetry.inc("anomaly_suppressed_threshold")
+            decision = "suppress_threshold"
+        else:
+            key = (symbol, label)
+            last_ts = processor.last_alert.get(key)
+            if last_ts and ts - last_ts < timedelta(seconds=cooldown_sec):
+                telemetry.inc("anomaly_suppressed_cooldown")
+                decision = "suppress_cooldown"
+        processor.anomaly_decisions_seen += 1
+        if (
+            processor.anomaly_decisions_seen == 1
+            or processor.anomaly_decisions_seen % settings.alert_log_every == 0
+        ):
+            log.info(
+                "anomaly_decision_sample",
+                extra={
+                    "symbol": symbol,
+                    "window": label,
+                    "ret": ret,
+                    "threshold": threshold,
+                    "decision": decision,
+                },
+            )
     events = detect_anomalies(
         symbol,
         ts,
@@ -51,10 +86,13 @@ async def check_anomalies(
         thresholds,
         processor.last_alert,
         headline_ctx,
-        anomaly_cooldown_sec=settings.anomaly_cooldown_sec,
+        anomaly_cooldown_sec=cooldown_sec,
         headline_max_age_sec=settings.headline_max_age_sec,
     )
     for event in events:
+        telemetry.inc("anomaly_emitted")
+        if event.headline is None:
+            telemetry.inc("anomaly_emitted_without_headline")
         if settings.anomaly_hotpath_stub_summary:
             summary = llm_summarize("stub", None, event.symbol, event.window, event.ret, event.headline, event.sentiment)
         else:

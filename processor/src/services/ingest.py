@@ -8,7 +8,7 @@ from dateutil import parser as dateparser
 
 from ..config import settings
 from ..io.db import insert_headline
-from ..utils import now_utc, simple_sentiment
+from ..utils import now_utc, parse_iso_datetime, simple_sentiment
 from ..retry import sleep_backoff, with_retries
 from ..logging_config import get_logger
 from ..metrics import get_metrics
@@ -78,7 +78,7 @@ async def publish_news_msg(processor: ProcessorState, msg: NewsMsg) -> None:
         log=getattr(processor, "log", None),
         op="insert_headline",
     )
-    processor.record_latest_headline(msg.title, msg.sentiment, msg.time)
+    processor.record_latest_headline(msg.title, msg.sentiment, parse_iso_datetime(msg.time))
     await with_retries(
         processor.producer.send_and_wait,
         settings.news_topic,
@@ -86,6 +86,15 @@ async def publish_news_msg(processor: ProcessorState, msg: NewsMsg) -> None:
         log=getattr(processor, "log", None),
         op="send_news",
     )
+
+
+def _entry_with_source(entry, source_title: str):
+    source = entry.get("source") if hasattr(entry, "get") else None
+    if source and source.get("title"):
+        return entry
+    enriched = dict(entry)
+    enriched["source"] = {"title": source_title}
+    return enriched
 
 
 async def price_ingest_task(processor: ProcessorState):
@@ -161,14 +170,37 @@ async def news_ingest_task(processor: ProcessorState):
     failures = 0
     news_messages_sent = 0
     metrics = get_metrics()
+    telemetry = get_metrics("processor")
+    stale_polls = 0
     while True:
         try:
-            feed = await asyncio.to_thread(feedparser.parse, settings.news_rss)
+            all_entries = []
+            feed_status = []
+            successful_feeds = 0
+            for feed_url in settings.news_rss_urls:
+                try:
+                    feed = await asyncio.to_thread(feedparser.parse, feed_url)
+                except Exception as exc:
+                    telemetry.inc("news_feed_errors")
+                    feed_status.append({"feed": feed_url, "status": "error", "error": str(exc)})
+                    log.warning("news_feed_error", extra={"feed": feed_url, "error": str(exc)})
+                    continue
+                source_title = (
+                    feed.get("feed", {}).get("title")
+                    if hasattr(feed, "get")
+                    else None
+                ) or settings.rss_default_source
+                entries = feed.entries[:settings.news_batch_limit]
+                all_entries.extend(_entry_with_source(entry, source_title) for entry in entries)
+                feed_status.append({"feed": feed_url, "status": "ok", "entries": len(entries)})
+                successful_feeds += 1
+            if successful_feeds == 0:
+                raise RuntimeError("all_news_feeds_failed")
             attempt = 0
             failures = 0
             seen_now = now_utc()
             _prune_seen(seen_cache, seen_order, seen_now)
-            for entry in feed.entries[:settings.news_batch_limit]:
+            for entry in all_entries:
                 sent, msg, uid = build_news_msg(entry, seen_cache, seen_order, pending, seen_now)
                 if sent and msg:
                     try:
@@ -179,8 +211,36 @@ async def news_ingest_task(processor: ProcessorState):
                     mark_seen(uid, seen_cache, seen_order, seen_now)
                     pending.discard(uid)
                     news_messages_sent += 1
+                    telemetry.inc("news_entries_ingested")
                     if news_messages_sent % settings.news_publish_log_every == 0:
                         log.info("news_published_count", extra={"count": news_messages_sent})
+            latest_ts = None
+            if hasattr(processor, "latest_headline"):
+                latest = processor.latest_headline
+                if isinstance(latest, tuple) and len(latest) >= 3:
+                    latest_ts = latest[2]
+            if latest_ts is not None:
+                latest_dt = parse_iso_datetime(latest_ts)
+                age_sec = max(0.0, (seen_now - latest_dt).total_seconds())
+                telemetry.observe("latest_headline_age_sec", age_sec)
+                stale = age_sec > settings.headline_stale_warn_sec
+            else:
+                age_sec = None
+                stale = True
+            if stale:
+                stale_polls += 1
+                telemetry.inc("news_stale_polls")
+                if stale_polls == 1 or stale_polls % settings.news_stale_log_every == 0:
+                    log.warning(
+                        "headline_stale",
+                        extra={
+                            "stale_polls": stale_polls,
+                            "latest_headline_age_sec": age_sec,
+                            "feed_status": feed_status,
+                        },
+                    )
+            else:
+                stale_polls = 0
         except asyncio.CancelledError:
             log.info("news_ingest_cancelled")
             break

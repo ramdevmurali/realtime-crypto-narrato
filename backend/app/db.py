@@ -1,10 +1,41 @@
 import asyncpg
 from datetime import datetime
-from typing import Optional
+from decimal import Decimal
+from typing import Optional, TypedDict
 
 from .config import settings
 
 _pool: Optional[asyncpg.Pool] = None
+
+
+class PriceRow(TypedDict):
+    time: datetime
+    symbol: str
+    price: float | Decimal
+
+
+class HeadlineRow(TypedDict):
+    time: datetime
+    title: str
+    url: str | None
+    source: str | None
+    sentiment: float | None
+
+
+AlertRow = TypedDict(
+    "AlertRow",
+    {
+        "time": datetime,
+        "symbol": str,
+        "window": str,
+        "direction": str,
+        "return": float | Decimal,
+        "threshold": float | Decimal,
+        "summary": str | None,
+        "headline": str | None,
+        "sentiment": float | None,
+    },
+)
 
 
 async def init_pool() -> asyncpg.Pool:
@@ -27,7 +58,7 @@ async def close_pool():
         _pool = None
 
 
-async def fetch_prices(symbol: str, limit: int = 200):
+async def fetch_prices(symbol: str, limit: int = 200) -> list[PriceRow]:
     pool = await get_pool()
     query = """
         SELECT time, symbol, price
@@ -39,7 +70,7 @@ async def fetch_prices(symbol: str, limit: int = 200):
     return await pool.fetch(query, symbol, limit)
 
 
-async def fetch_latest_metrics(symbol: str):
+async def fetch_latest_metrics(symbol: str) -> asyncpg.Record | None:
     pool = await get_pool()
     query = """
         SELECT *
@@ -51,7 +82,7 @@ async def fetch_latest_metrics(symbol: str):
     return await pool.fetchrow(query, symbol)
 
 
-async def fetch_headlines(limit: int = 20, since: datetime | None = None):
+async def fetch_headlines(limit: int = 20, since: datetime | None = None) -> list[HeadlineRow]:
     pool = await get_pool()
     if since is None:
         query = """
@@ -71,7 +102,7 @@ async def fetch_headlines(limit: int = 20, since: datetime | None = None):
     return await pool.fetch(query, since, limit)
 
 
-async def fetch_alerts(limit: int = 20, since: datetime | None = None):
+async def fetch_alerts(limit: int = 20, since: datetime | None = None) -> list[AlertRow]:
     pool = await get_pool()
     if since is None:
         query = """

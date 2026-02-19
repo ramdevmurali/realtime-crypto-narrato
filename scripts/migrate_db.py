@@ -1,7 +1,14 @@
 #!/usr/bin/env python3
 import asyncio
+import os
+import sys
 
 import asyncpg
+
+ROOT = os.path.dirname(os.path.abspath(__file__))
+PROCESSOR_SRC = os.path.join(ROOT, "..", "processor", "src")
+if PROCESSOR_SRC not in sys.path:
+    sys.path.append(PROCESSOR_SRC)
 
 from processor.src.config import settings
 

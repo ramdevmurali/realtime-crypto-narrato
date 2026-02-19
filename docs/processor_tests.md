@@ -32,7 +32,7 @@
 
 - `test_ingest.py`
   - Ingest helpers without real feeds
-  - process_feed_entry dedupes via seen_cache/seen_order (publish/insert once)
+  - build_news_msg/publish_news_msg dedupe and publish path (publish/insert once)
   - price_ingest_task publishes one price from a mocked miniTicker websocket
 - `test_summary_sidecar.py`
   - Sidecar handler consumes summary request, calls LLM (stubbed), updates anomalies summary field, and republishes enriched alert to `alerts`.
@@ -45,6 +45,14 @@
   - `news-enriched` is produced by the sentiment sidecar (not the processor)
 - `test_config.py`
   - Config validation: window labels, llm provider, percentiles, positive values
+- `test_anomaly_decision.py`
+  - Pure anomaly decision logic (detect_anomalies) without side effects
+- `test_streaming_core_metrics.py`
+  - /metrics handler for processor returns JSON snapshot
+- `test_utils.py`
+  - Retry/backoff helpers and ISO datetime parsing
+- `test_migrate_db.py`
+  - Migration DDL/retention policy logic (unit-level)
 - `integration/test_e2e.py`
   - Kafka+DB happy path (prices -> metrics/anomalies)
   - Retry path (transient DB error -> eventual success)

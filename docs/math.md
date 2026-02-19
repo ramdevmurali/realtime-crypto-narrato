@@ -29,6 +29,7 @@ The return is **undefined** if:
 ```
 max_gap = min(Δ, Δ * WINDOW_MAX_GAP_FACTOR)
 ```
+Returns are also undefined if the **latest** point is too stale (gap > `max_gap`), not just the reference point.
 
 ## 4. Volatility (Resampled)
 We resample prices at a fixed cadence `S = VOL_RESAMPLE_SEC` inside the window:
@@ -45,6 +46,9 @@ Undefined if:
 - Fewer than 3 **actual** points inside the window.
 - Fewer than 3 resampled points.
 - Any resample gap exceeds `max_gap`.
+- The latest point is too stale (gap > `max_gap`).
+
+Volatility uses `VOL_MAX_GAP_FACTOR` as an override for `max_gap` (defaults to `WINDOW_MAX_GAP_FACTOR`).
 
 ## 5. History‑Based Z‑Scores
 For a value `x_t` and series `{x_i}`:

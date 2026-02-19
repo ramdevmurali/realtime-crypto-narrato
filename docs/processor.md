@@ -150,6 +150,9 @@ curl -N 'http://localhost:8000/headlines/stream?limit=5&interval=2'
 Note: this section is about **in‑memory window retention**, not DB retention. See **DB retention (optional)** below.
 
 ## DB retention (optional)
+Schema creation is out‑of‑band: run `scripts/migrate_db.py` before starting the processor.
+The processor does **not** run DDL on startup.
+
 Retention policies are applied only when you run `scripts/migrate_db.py`.
 Set any of these env vars to enable:
 - `RETENTION_PRICES_DAYS` (default 30 if set)
@@ -170,7 +173,7 @@ Categories:
 - Sidecar + sentiment/LLM behavior
 
 Examples of critical knobs:
-- `ENABLE_DB_INIT` (dev convenience; set false in prod and run `scripts/migrate_db.py`)
+- `ENABLE_DB_INIT` (used by `init_tables()` in dev/scripts; processor no longer runs DDL at startup)
 - `KAFKA_AUTO_OFFSET_RESET`, `PROCESSOR_CONSUMER_GROUP`
 - `LATE_PRICE_TOLERANCE_SEC`, `ANOMALY_COOLDOWN_SEC`
 - `PROCESSOR_METRICS_PORT`, `SUMMARY_METRICS_PORT`

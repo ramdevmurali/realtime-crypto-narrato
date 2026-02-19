@@ -9,7 +9,7 @@ from typing import Callable
 from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
 
 from .config import settings
-from .io.db import init_tables, init_pool, close_pool
+from .io.db import init_pool, close_pool
 from .services.ingest import price_ingest_task, news_ingest_task
 from .utils import with_retries
 from .logging_config import get_logger
@@ -32,7 +32,6 @@ class StreamProcessor(ProcessorStateImpl, RuntimeService):
         await self._start_metrics_server()
         await init_pool()
         await healthcheck(self.log)
-        await init_tables()
         self.producer = AIOKafkaProducer(bootstrap_servers=settings.kafka_brokers)
         await self.producer.start()
         self.consumer = AIOKafkaConsumer(

@@ -97,6 +97,13 @@ def _entry_with_source(entry, source_title: str):
     return enriched
 
 
+def _get_news_feed_urls(cfg=settings) -> list[str]:
+    urls = getattr(cfg, "news_rss_urls", None)
+    if urls:
+        return urls
+    return [cfg.news_rss]
+
+
 async def price_ingest_task(processor: ProcessorState):
     """Stream prices from Binance and publish raw ticks to Kafka."""
     assert processor.producer
@@ -177,9 +184,30 @@ async def news_ingest_task(processor: ProcessorState):
             all_entries = []
             feed_status = []
             successful_feeds = 0
-            for feed_url in settings.news_rss_urls:
+            for feed_url in _get_news_feed_urls(settings):
                 try:
-                    feed = await asyncio.to_thread(feedparser.parse, feed_url)
+                    feed = await asyncio.wait_for(
+                        asyncio.to_thread(feedparser.parse, feed_url),
+                        timeout=settings.news_feed_timeout_sec,
+                    )
+                except asyncio.TimeoutError:
+                    telemetry.inc("news_feed_errors")
+                    feed_status.append(
+                        {
+                            "feed": feed_url,
+                            "status": "timeout",
+                            "timeout_sec": settings.news_feed_timeout_sec,
+                        }
+                    )
+                    log.warning(
+                        "news_feed_error",
+                        extra={
+                            "feed": feed_url,
+                            "error": "timeout",
+                            "timeout_sec": settings.news_feed_timeout_sec,
+                        },
+                    )
+                    continue
                 except Exception as exc:
                     telemetry.inc("news_feed_errors")
                     feed_status.append({"feed": feed_url, "status": "error", "error": str(exc)})

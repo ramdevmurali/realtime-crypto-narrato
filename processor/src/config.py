@@ -66,6 +66,7 @@ class Settings(BaseSettings):
     news_backoff_base_after_failures_sec: float = 10.0
     news_backoff_cap_sec: float = 90.0
     news_poll_interval_sec: int = 60
+    news_feed_timeout_sec: float = 10.0
     news_batch_limit: int = 20
     news_rss_urls_raw: str = Field(default="", validation_alias="NEWS_RSS_URLS")
     headline_stale_warn_sec: int = 300
@@ -187,6 +188,7 @@ class Settings(BaseSettings):
         "news_backoff_base_after_failures_sec",
         "news_backoff_cap_sec",
         "news_poll_interval_sec",
+        "news_feed_timeout_sec",
         "news_batch_limit",
         "headline_stale_warn_sec",
         "news_stale_log_every",

@@ -146,6 +146,26 @@ def test_build_news_msg_max_cap(monkeypatch):
     assert len(seen_order) == 2
 
 
+def test_news_rss_urls_override_single_feed(monkeypatch):
+    monkeypatch.setattr(settings, "news_rss", "https://single.example/rss")
+    monkeypatch.setattr(
+        settings,
+        "news_rss_urls_raw",
+        "https://feed-a.example/rss, https://feed-b.example/rss",
+    )
+
+    urls = ingest._get_news_feed_urls(settings)
+    assert urls == ["https://feed-a.example/rss", "https://feed-b.example/rss"]
+
+
+def test_news_rss_urls_fallback_to_news_rss(monkeypatch):
+    monkeypatch.setattr(settings, "news_rss", "https://single.example/rss")
+    monkeypatch.setattr(settings, "news_rss_urls_raw", "")
+
+    urls = ingest._get_news_feed_urls(settings)
+    assert urls == ["https://single.example/rss"]
+
+
 @pytest.mark.asyncio
 async def test_publish_news_msg_inserts_and_publishes(monkeypatch):
     calls = []
@@ -381,7 +401,9 @@ async def test_price_ingest_task_falls_back_to_now(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_news_ingest_task_merges_multi_feed_and_dedupes(monkeypatch):
+async def test_news_ingest_one_feed_failure_does_not_block_others(monkeypatch):
+    import time
+
     metrics_module._GLOBAL_METRICS = metrics_module.MetricsRegistry(service_name="processor")
 
     class Feed:
@@ -395,34 +417,17 @@ async def test_news_ingest_task_merges_multi_feed_and_dedupes(monkeypatch):
             return default
 
     def fake_parse(url):
-        if "bad" in url:
-            raise RuntimeError("feed down")
-        if "feed-a" in url:
-            return Feed(
-                "feed-a",
-                [
-                    {
-                        "id": "shared",
-                        "title": "A shared headline",
-                        "link": "https://a.example/shared",
-                        "published": "2026-01-27T12:00:00Z",
-                    },
-                ],
-            )
+        if "slow-feed" in url:
+            time.sleep(0.2)
+            return Feed("slow-feed", [])
         return Feed(
-            "feed-b",
+            "fast-feed",
             [
                 {
-                    "id": "shared",
-                    "title": "B duplicate headline",
-                    "link": "https://b.example/shared",
+                    "id": "unique-fast",
+                    "title": "Fast feed headline",
+                    "link": "https://fast.example/unique",
                     "published": "2026-01-27T12:00:00Z",
-                },
-                {
-                    "id": "unique-b",
-                    "title": "B unique headline",
-                    "link": "https://b.example/unique",
-                    "published": "2026-01-27T12:00:01Z",
                 },
             ],
         )
@@ -435,7 +440,8 @@ async def test_news_ingest_task_merges_multi_feed_and_dedupes(monkeypatch):
     async def stop_after_one_poll(_seconds):
         raise asyncio.CancelledError()
 
-    monkeypatch.setattr(settings, "news_rss_urls_raw", "https://feed-a/rss,https://bad/rss,https://feed-b/rss")
+    monkeypatch.setattr(settings, "news_rss_urls_raw", "https://slow-feed/rss,https://fast-feed/rss")
+    monkeypatch.setattr(settings, "news_feed_timeout_sec", 0.01)
     monkeypatch.setattr(settings, "news_batch_limit", 20)
     monkeypatch.setattr(ingest.feedparser, "parse", fake_parse)
     monkeypatch.setattr(ingest, "publish_news_msg", fake_publish)
@@ -445,11 +451,73 @@ async def test_news_ingest_task_merges_multi_feed_and_dedupes(monkeypatch):
     with pytest.raises(asyncio.CancelledError):
         await ingest.news_ingest_task(proc)
 
-    assert len(published) == 2
-    assert {msg.source for msg in published} == {"feed-a", "feed-b"}
+    assert len(published) == 1
+    assert published[0].title == "Fast feed headline"
     counters = metrics_module.get_metrics().snapshot()["counters"]
-    assert counters.get("processor.news_entries_ingested") == 2
     assert counters.get("processor.news_feed_errors") == 1
+
+
+@pytest.mark.asyncio
+async def test_news_ingest_cross_feed_duplicate_published_once(monkeypatch):
+    metrics_module._GLOBAL_METRICS = metrics_module.MetricsRegistry(service_name="processor")
+
+    class Feed:
+        def __init__(self, title, entries):
+            self.feed = {"title": title}
+            self.entries = entries
+
+        def get(self, key, default=None):
+            if key == "feed":
+                return self.feed
+            return default
+
+    def fake_parse(url):
+        if "feed-a" in url:
+            return Feed(
+                "feed-a",
+                [
+                    {
+                        "id": "shared",
+                        "title": "Shared headline",
+                        "link": "https://a.example/shared",
+                        "published": "2026-01-27T12:00:00Z",
+                    },
+                ],
+            )
+        return Feed(
+            "feed-b",
+            [
+                {
+                    "id": "shared",
+                    "title": "Shared headline duplicate",
+                    "link": "https://b.example/shared",
+                    "published": "2026-01-27T12:00:00Z",
+                },
+            ],
+        )
+
+    published = []
+
+    async def fake_publish(_processor, msg):
+        published.append(msg)
+
+    async def stop_after_one_poll(_seconds):
+        raise asyncio.CancelledError()
+
+    monkeypatch.setattr(settings, "news_rss_urls_raw", "https://feed-a/rss,https://feed-b/rss")
+    monkeypatch.setattr(settings, "news_batch_limit", 20)
+    monkeypatch.setattr(ingest.feedparser, "parse", fake_parse)
+    monkeypatch.setattr(ingest, "publish_news_msg", fake_publish)
+    monkeypatch.setattr(ingest.asyncio, "sleep", stop_after_one_poll)
+
+    proc = FakeProcessor()
+    with pytest.raises(asyncio.CancelledError):
+        await ingest.news_ingest_task(proc)
+
+    assert len(published) == 1
+    assert published[0].source == "feed-a"
+    counters = metrics_module.get_metrics().snapshot()["counters"]
+    assert counters.get("processor.news_entries_ingested") == 1
 
 
 @pytest.mark.asyncio

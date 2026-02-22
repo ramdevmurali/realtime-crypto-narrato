@@ -68,9 +68,10 @@ def mark_seen(uid: str | None, seen_cache: dict[str, datetime], seen_order: dequ
 
 
 async def publish_news_msg(processor: ProcessorState, msg: NewsMsg) -> None:
+    ts = parse_iso_datetime(msg.time)
     await with_retries(
         insert_headline,
-        msg.time,
+        ts,
         msg.title,
         msg.source,
         msg.url,
@@ -78,7 +79,7 @@ async def publish_news_msg(processor: ProcessorState, msg: NewsMsg) -> None:
         log=getattr(processor, "log", None),
         op="insert_headline",
     )
-    processor.record_latest_headline(msg.title, msg.sentiment, parse_iso_datetime(msg.time))
+    processor.record_latest_headline(msg.title, msg.sentiment, ts)
     await with_retries(
         processor.producer.send_and_wait,
         settings.news_topic,

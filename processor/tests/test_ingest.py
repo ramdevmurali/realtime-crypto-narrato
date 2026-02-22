@@ -190,6 +190,7 @@ async def test_publish_news_msg_inserts_and_publishes(monkeypatch):
 
     await ingest.publish_news_msg(proc, msg)
     assert len(calls) == 1
+    assert isinstance(calls[0][0], datetime)
     assert len(proc.producer.sent) == 1
     assert proc.latest_headline[0] == "Breaking"
 

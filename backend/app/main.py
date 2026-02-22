@@ -8,7 +8,7 @@ import logging
 
 from .config import settings
 from . import db
-from .streams import alerts_event_generator, headlines_event_generator
+from .streams import alerts_event_generator, headlines_event_generator, serialize_alert_row
 from .time_utils import parse_since
 
 logger = logging.getLogger(__name__)
@@ -97,20 +97,7 @@ async def get_alerts(
 ):
     since_dt = parse_since(since) if since else None
     rows = await db.fetch_alerts(limit, since=since_dt)
-    return [
-        {
-            "time": r["time"].isoformat() if hasattr(r["time"], "isoformat") else str(r["time"]),
-            "symbol": r["symbol"],
-            "window": r["window"],
-            "direction": r["direction"],
-            "return": r["return"],
-            "threshold": r["threshold"],
-            "summary": r["summary"],
-            "headline": r["headline"],
-            "sentiment": r["sentiment"],
-        }
-        for r in rows
-    ]
+    return [serialize_alert_row(r) for r in rows]
 
 
 if __name__ == "__main__":

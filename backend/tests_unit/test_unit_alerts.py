@@ -10,6 +10,16 @@ from backend.app import main, db, streams
 def test_alerts(monkeypatch):
     calls = {}
     ts = datetime(2026, 1, 27, 12, 0, 0, tzinfo=timezone.utc)
+    fixed_now = datetime(2026, 1, 27, 12, 10, 0, tzinfo=timezone.utc)
+
+    class _FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            if tz is None:
+                return fixed_now.replace(tzinfo=None)
+            return fixed_now.astimezone(tz)
+
+    monkeypatch.setattr(streams, "datetime", _FixedDateTime)
 
     async def fake_fetch_alerts(limit, since=None):
         calls["limit"] = limit
@@ -35,9 +45,23 @@ def test_alerts(monkeypatch):
     body = resp.json()
     assert calls["limit"] == 4
     assert isinstance(body, list) and len(body) == 1
-    expected_keys = {"time", "symbol", "window", "direction", "return", "threshold", "summary", "headline", "sentiment"}
+    expected_keys = {
+        "time",
+        "symbol",
+        "window",
+        "direction",
+        "return",
+        "threshold",
+        "summary",
+        "headline",
+        "sentiment",
+        "headline_age_sec",
+        "headline_fresh",
+    }
     assert set(body[0].keys()) == expected_keys
     assert body[0]["time"] == ts.isoformat()
+    assert body[0]["headline_age_sec"] == 600
+    assert body[0]["headline_fresh"] is True
 
 
 def test_alerts_since_passed(monkeypatch):
@@ -60,6 +84,16 @@ def test_alerts_since_passed(monkeypatch):
 
 def test_alerts_stream_payload(monkeypatch):
     ts = datetime(2026, 1, 27, 12, 0, 0, tzinfo=timezone.utc)
+    fixed_now = datetime(2026, 1, 27, 13, 0, 0, tzinfo=timezone.utc)
+
+    class _FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            if tz is None:
+                return fixed_now.replace(tzinfo=None)
+            return fixed_now.astimezone(tz)
+
+    monkeypatch.setattr(streams, "datetime", _FixedDateTime)
 
     async def fake_fetch_alerts(limit):
         return [
@@ -88,5 +122,19 @@ def test_alerts_stream_payload(monkeypatch):
     assert data["count"] == 1
     item = data["items"][0]
     assert item["time"] == ts.isoformat()
-    expected_keys = {"time", "symbol", "window", "direction", "return", "threshold", "summary", "headline", "sentiment"}
+    expected_keys = {
+        "time",
+        "symbol",
+        "window",
+        "direction",
+        "return",
+        "threshold",
+        "summary",
+        "headline",
+        "sentiment",
+        "headline_age_sec",
+        "headline_fresh",
+    }
     assert set(item.keys()) == expected_keys
+    assert item["headline_age_sec"] == 3600
+    assert item["headline_fresh"] is False

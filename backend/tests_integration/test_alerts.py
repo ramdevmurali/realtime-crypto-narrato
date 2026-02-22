@@ -27,5 +27,17 @@ async def test_alerts_stream_emits_event(client, seed_data):
     assert payload is not None, "no sse data received"
     assert payload["count"] == 1
     item = payload["items"][0]
-    expected_keys = {"time", "symbol", "window", "direction", "return", "threshold", "summary", "headline", "sentiment"}
+    expected_keys = {
+        "time",
+        "symbol",
+        "window",
+        "direction",
+        "return",
+        "threshold",
+        "summary",
+        "headline",
+        "sentiment",
+        "headline_age_sec",
+        "headline_fresh",
+    }
     assert set(item.keys()) == expected_keys

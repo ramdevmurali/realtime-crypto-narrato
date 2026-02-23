@@ -1,6 +1,7 @@
 import { useState } from 'react'
 
 import { PlaceholderCard } from '../components/placeholder-card'
+import { AlertDetailPanel } from '../features/alerts/alert-detail-panel'
 import { AlertsPanel } from '../features/alerts/alerts-panel'
 import { HeadlinesPanel } from '../features/headlines/headlines-panel'
 import type { Alert } from '../lib/types'
@@ -23,12 +24,7 @@ export function DashboardPage() {
       <section className="grid gap-4 lg:grid-cols-2">
         <AlertsPanel selectedAlertKey={selectedAlertKey} onSelectAlert={setSelectedAlert} />
         <HeadlinesPanel />
-        <PlaceholderCard
-          title="Metrics"
-          description="Latest computed metrics from /metrics/latest"
-        >
-          Metrics cards and trend widgets will be added next.
-        </PlaceholderCard>
+        <AlertDetailPanel alert={selectedAlert} />
         <PlaceholderCard title="Prices" description="Recent prices from /prices">
           Price timeline and range controls will be added next.
         </PlaceholderCard>

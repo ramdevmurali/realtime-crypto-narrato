@@ -1,7 +1,6 @@
 import { useState } from 'react'
 
 import { PlaceholderCard } from '../components/placeholder-card'
-import { AlertDetailPanel } from '../features/alerts/alert-detail-panel'
 import { AlertsPanel } from '../features/alerts/alerts-panel'
 import { HeadlinesPanel } from '../features/headlines/headlines-panel'
 import type { Alert } from '../lib/types'
@@ -28,7 +27,12 @@ export function DashboardPage() {
           onClearSelectedAlert={() => setSelectedAlert(null)}
         />
         <HeadlinesPanel />
-        <AlertDetailPanel alert={selectedAlert} />
+        <PlaceholderCard
+          title="Metrics"
+          description="Latest computed metrics from /metrics/latest"
+        >
+          Metrics cards and trend widgets will be added next.
+        </PlaceholderCard>
         <PlaceholderCard title="Prices" description="Recent prices from /prices">
           Price timeline and range controls will be added next.
         </PlaceholderCard>

@@ -24,9 +24,18 @@ log = get_logger(__name__)
 async def _commit_message(consumer, msg, log):
     tp = TopicPartition(msg.topic, msg.partition)
     try:
-        await consumer.commit({tp: OffsetAndMetadata(msg.offset + 1, None)})
+        await consumer.commit({tp: OffsetAndMetadata(msg.offset + 1, "")})
     except Exception as exc:
-        log.warning("news_commit_failed", extra={"error": str(exc), "offset": msg.offset})
+        log.warning(
+            "news_commit_failed",
+            extra={
+                "topic": msg.topic,
+                "partition": msg.partition,
+                "offset": msg.offset,
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+            },
+        )
 
 
 async def _send_dlq(producer, payload: bytes, log, metrics: MetricsRegistry, offset: int | None = None) -> bool:

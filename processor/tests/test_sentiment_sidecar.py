@@ -71,6 +71,67 @@ class FakeMsg:
         self.value = payload
 
 
+@pytest.mark.asyncio
+async def test_commit_message_uses_non_null_metadata():
+    class CommitConsumer:
+        def __init__(self):
+            self.calls = []
+
+        async def commit(self, offsets):
+            self.calls.append(offsets)
+
+    class CommitLog:
+        def __init__(self):
+            self.warnings = []
+
+        def warning(self, key, extra=None):
+            self.warnings.append((key, extra))
+
+    consumer = CommitConsumer()
+    log = CommitLog()
+    msg = FakeMsg(b"{}")
+
+    await sentiment_sidecar._commit_message(consumer, msg, log)
+
+    assert len(consumer.calls) == 1
+    commit_map = consumer.calls[0]
+    assert len(commit_map) == 1
+    tp, offset_meta = next(iter(commit_map.items()))
+    assert tp.topic == "news"
+    assert tp.partition == 0
+    assert offset_meta.offset == 6
+    assert offset_meta.metadata == ""
+    assert log.warnings == []
+
+
+@pytest.mark.asyncio
+async def test_commit_message_logs_warning_on_failure():
+    class FailingConsumer:
+        async def commit(self, offsets):
+            raise RuntimeError("commit boom")
+
+    class CommitLog:
+        def __init__(self):
+            self.warnings = []
+
+        def warning(self, key, extra=None):
+            self.warnings.append((key, extra))
+
+    log = CommitLog()
+    msg = FakeMsg(b"{}")
+
+    await sentiment_sidecar._commit_message(FailingConsumer(), msg, log)
+
+    assert len(log.warnings) == 1
+    key, extra = log.warnings[0]
+    assert key == "news_commit_failed"
+    assert extra["topic"] == "news"
+    assert extra["partition"] == 0
+    assert extra["offset"] == 5
+    assert extra["error_type"] == "RuntimeError"
+    assert "commit boom" in extra["error"]
+
+
 def _expected_event_id(payload: NewsMsg) -> str:
     title_norm = (payload.title or "").strip().lower()
     source_norm = (payload.source or "unknown").strip().lower()

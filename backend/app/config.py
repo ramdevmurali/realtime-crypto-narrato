@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     alerts_topic: str = "alerts"
     api_host: str = "0.0.0.0"
     api_port: int = 8000
+    cors_allowed_origins_raw: str = "http://localhost:5173"
 
     @field_validator("kafka_brokers_raw", mode="before")
     @classmethod
@@ -48,9 +49,20 @@ class Settings(BaseSettings):
             return ""
         return str(v)
 
+    @field_validator("cors_allowed_origins_raw", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v):
+        if v is None:
+            return ""
+        return str(v)
+
     @property
     def kafka_brokers(self) -> List[str]:
         return _split_csv(self.kafka_brokers_raw)
+
+    @property
+    def cors_allowed_origins(self) -> List[str]:
+        return _split_csv(self.cors_allowed_origins_raw)
 
 
 settings = Settings()

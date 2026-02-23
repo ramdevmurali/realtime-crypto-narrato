@@ -8,16 +8,26 @@ type StreamOptions<T> = {
   onError?: (error: Event) => void
 }
 
+function joinPath(base: string, path: string): string {
+  const trimmedPath = path.replace(/^\/+/, '')
+  if (!base) {
+    return `/${trimmedPath}`
+  }
+  return `${base}/${trimmedPath}`
+}
+
 function subscribeStream<T>(path: string, options: StreamOptions<T>): () => void {
-  const url = new URL(path, `${getApiBaseUrl()}/`)
+  const query = new URLSearchParams()
   if (options.limit !== undefined) {
-    url.searchParams.set('limit', String(options.limit))
+    query.set('limit', String(options.limit))
   }
   if (options.interval !== undefined) {
-    url.searchParams.set('interval', String(options.interval))
+    query.set('interval', String(options.interval))
   }
 
-  const eventSource = new EventSource(url.toString())
+  const baseUrl = joinPath(getApiBaseUrl(), path)
+  const streamUrl = query.toString() ? `${baseUrl}?${query.toString()}` : baseUrl
+  const eventSource = new EventSource(streamUrl)
 
   eventSource.onmessage = (event) => {
     const payload = JSON.parse(event.data) as StreamPayload<T>

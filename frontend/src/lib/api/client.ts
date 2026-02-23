@@ -6,17 +6,28 @@ type PriceQuery = {
   limit?: number
 }
 
+function joinPath(base: string, path: string): string {
+  const trimmedPath = path.replace(/^\/+/, '')
+  if (!base) {
+    return `/${trimmedPath}`
+  }
+  return `${base}/${trimmedPath}`
+}
+
 function buildUrl(path: string, params?: Record<string, string | number | undefined>): string {
-  const url = new URL(path, `${getApiBaseUrl()}/`)
+  const query = new URLSearchParams()
   if (params) {
     for (const [key, value] of Object.entries(params)) {
       if (value === undefined || value === '') {
         continue
       }
-      url.searchParams.set(key, String(value))
+      query.set(key, String(value))
     }
   }
-  return url.toString()
+
+  const url = joinPath(getApiBaseUrl(), path)
+  const qs = query.toString()
+  return qs ? `${url}?${qs}` : url
 }
 
 async function requestJson<T>(path: string, params?: Record<string, string | number | undefined>): Promise<T> {

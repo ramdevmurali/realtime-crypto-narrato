@@ -35,14 +35,16 @@ function truncateSummary(text: string, maxChars = 140): string {
 }
 
 type AlertsPanelProps = {
-  selectedAlert: Alert | null
   onSelectAlert: (alert: Alert) => void
+  selectedAlertKey?: string | null
 }
 
-export function AlertsPanel({ selectedAlert, onSelectAlert }: AlertsPanelProps) {
+function getAlertRowKey(alert: Alert): string {
+  return `${alert.time}|${alert.symbol}|${alert.window}|${alert.direction}`
+}
+
+export function AlertsPanel({ onSelectAlert, selectedAlertKey }: AlertsPanelProps) {
   const { items, isLoading, isError, error, isLive, lastEventAt } = useAlerts({ limit: 5, interval: 2 })
-  void selectedAlert
-  void onSelectAlert
 
   return (
     <PlaceholderCard
@@ -57,6 +59,8 @@ export function AlertsPanel({ selectedAlert, onSelectAlert }: AlertsPanelProps) 
       {!isLoading && !isError && items.length > 0 && (
         <ul className="space-y-2">
           {items.map((alert) => {
+            const rowKey = getAlertRowKey(alert)
+            const isSelected = selectedAlertKey === rowKey
             const direction = getDirectionBadge(alert.direction)
             const freshness = getFreshnessBadge(alert.headline_fresh)
             const ageText =
@@ -68,8 +72,13 @@ export function AlertsPanel({ selectedAlert, onSelectAlert }: AlertsPanelProps) 
 
             return (
               <li
-                key={`${alert.time}|${alert.symbol}|${alert.window}|${alert.direction}`}
-                className="rounded border border-slate-200 p-2"
+                key={rowKey}
+                className={`cursor-pointer rounded border p-2 transition-colors ${
+                  isSelected
+                    ? 'border-sky-400 bg-sky-50/40'
+                    : 'border-slate-200 hover:border-slate-300'
+                }`}
+                onClick={() => onSelectAlert(alert)}
               >
                 <p className="flex flex-wrap items-center gap-2">
                   <strong>{alert.symbol}</strong> · {alert.window}

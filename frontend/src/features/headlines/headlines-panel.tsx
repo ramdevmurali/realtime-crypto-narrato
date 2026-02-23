@@ -43,13 +43,6 @@ export function HeadlinesPanel() {
     limit: 5,
     interval: 2,
   })
-  if (items.length > 0) {
-    const latest = items[0]
-    void formatHeadlineTime(latest.time)
-    const ageSec = getHeadlineAgeSec(latest.time)
-    void getHeadlineFreshness(ageSec)
-    void getFreshnessBadgeClass(getHeadlineFreshness(ageSec))
-  }
 
   return (
     <PlaceholderCard
@@ -58,7 +51,48 @@ export function HeadlinesPanel() {
     >
       {isLoading && <p>Loading headlines...</p>}
       {isError && <p>Failed to load headlines: {error?.message}</p>}
-      {!isLoading && !isError && <p>{items.length} headline(s) loaded.</p>}
+      {!isLoading && !isError && items.length === 0 && <p>No headlines yet.</p>}
+      {!isLoading && !isError && items.length > 0 && (
+        <ul className="space-y-2">
+          {items.map((headline) => {
+            const ageSec = getHeadlineAgeSec(headline.time)
+            const freshness = getHeadlineFreshness(ageSec)
+            const freshnessClass = getFreshnessBadgeClass(freshness)
+
+            return (
+              <li
+                key={
+                  headline.url ??
+                  `${headline.time}|${headline.title}|${headline.source ?? ''}`
+                }
+                className="rounded border border-slate-200 p-2"
+              >
+                <p className="font-medium">{headline.title}</p>
+                <p className="text-sm">
+                  source: {headline.source ?? 'unknown'} · time:{' '}
+                  {formatHeadlineTime(headline.time)}
+                </p>
+                <p className="flex flex-wrap items-center gap-2 text-sm">
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${freshnessClass}`}
+                  >
+                    {freshness}
+                  </span>
+                  <span className="text-xs text-slate-500">
+                    age: {ageSec === null ? 'n/a' : `${ageSec}s`}
+                  </span>
+                  <span>
+                    sentiment:{' '}
+                    {typeof headline.sentiment === 'number'
+                      ? headline.sentiment
+                      : 'n/a'}
+                  </span>
+                </p>
+              </li>
+            )
+          })}
+        </ul>
+      )}
       <p>Live: {isLive ? 'connected' : 'waiting for stream'}</p>
       <p>Last event: {lastEventAt ? lastEventAt.toLocaleTimeString() : 'n/a'}</p>
     </PlaceholderCard>

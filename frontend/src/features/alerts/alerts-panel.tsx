@@ -1,5 +1,6 @@
 import { PlaceholderCard } from '../../components/placeholder-card'
 import type { Alert } from '../../lib/types'
+import { useEffect } from 'react'
 import { useAlerts } from './use-alerts'
 
 function getDirectionBadge(direction: string): { label: string; className: string } {
@@ -36,6 +37,7 @@ function truncateSummary(text: string, maxChars = 140): string {
 
 type AlertsPanelProps = {
   onSelectAlert: (alert: Alert) => void
+  onClearSelectedAlert?: () => void
   selectedAlertKey?: string | null
 }
 
@@ -43,8 +45,21 @@ function getAlertRowKey(alert: Alert): string {
   return `${alert.time}|${alert.symbol}|${alert.window}|${alert.direction}`
 }
 
-export function AlertsPanel({ onSelectAlert, selectedAlertKey }: AlertsPanelProps) {
+export function AlertsPanel({
+  onSelectAlert,
+  onClearSelectedAlert,
+  selectedAlertKey,
+}: AlertsPanelProps) {
   const { items, isLoading, isError, error, isLive, lastEventAt } = useAlerts({ limit: 5, interval: 2 })
+  useEffect(() => {
+    if (isLoading || isError || !selectedAlertKey) {
+      return
+    }
+    const stillPresent = items.some((item) => getAlertRowKey(item) === selectedAlertKey)
+    if (!stillPresent) {
+      onClearSelectedAlert?.()
+    }
+  }, [isError, isLoading, items, onClearSelectedAlert, selectedAlertKey])
 
   return (
     <PlaceholderCard

@@ -22,7 +22,11 @@ export function DashboardPage() {
       </header>
 
       <section className="grid gap-4 lg:grid-cols-2">
-        <AlertsPanel selectedAlertKey={selectedAlertKey} onSelectAlert={setSelectedAlert} />
+        <AlertsPanel
+          selectedAlertKey={selectedAlertKey}
+          onSelectAlert={setSelectedAlert}
+          onClearSelectedAlert={() => setSelectedAlert(null)}
+        />
         <HeadlinesPanel />
         <AlertDetailPanel alert={selectedAlert} />
         <PlaceholderCard title="Prices" description="Recent prices from /prices">

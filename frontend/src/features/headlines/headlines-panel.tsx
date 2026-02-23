@@ -49,6 +49,8 @@ export function HeadlinesPanel() {
       title="Headlines"
       description="Latest headlines from /headlines and /headlines/stream"
     >
+      <p>Live: {isLive ? 'connected' : 'waiting for stream'}</p>
+      <p>Last event: {lastEventAt ? lastEventAt.toLocaleTimeString() : 'n/a'}</p>
       {isLoading && <p>Loading headlines...</p>}
       {isError && <p>Failed to load headlines: {error?.message}</p>}
       {!isLoading && !isError && items.length === 0 && <p>No headlines yet.</p>}
@@ -93,8 +95,6 @@ export function HeadlinesPanel() {
           })}
         </ul>
       )}
-      <p>Live: {isLive ? 'connected' : 'waiting for stream'}</p>
-      <p>Last event: {lastEventAt ? lastEventAt.toLocaleTimeString() : 'n/a'}</p>
     </PlaceholderCard>
   )
 }

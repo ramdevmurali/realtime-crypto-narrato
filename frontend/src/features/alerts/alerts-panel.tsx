@@ -73,12 +73,21 @@ export function AlertsPanel({ onSelectAlert, selectedAlertKey }: AlertsPanelProp
             return (
               <li
                 key={rowKey}
-                className={`cursor-pointer rounded border p-2 transition-colors ${
+                aria-pressed={isSelected}
+                className={`cursor-pointer rounded border p-2 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 ${
                   isSelected
-                    ? 'border-sky-400 bg-sky-50/40'
+                    ? 'border-sky-500 bg-sky-50/60'
                     : 'border-slate-200 hover:border-slate-300'
                 }`}
                 onClick={() => onSelectAlert(alert)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    onSelectAlert(alert)
+                  }
+                }}
+                role="button"
+                tabIndex={0}
               >
                 <p className="flex flex-wrap items-center gap-2">
                   <strong>{alert.symbol}</strong> · {alert.window}

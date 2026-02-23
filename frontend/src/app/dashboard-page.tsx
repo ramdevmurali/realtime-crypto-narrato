@@ -1,8 +1,13 @@
+import { useState } from 'react'
+
 import { PlaceholderCard } from '../components/placeholder-card'
 import { AlertsPanel } from '../features/alerts/alerts-panel'
 import { HeadlinesPanel } from '../features/headlines/headlines-panel'
+import type { Alert } from '../lib/types'
 
 export function DashboardPage() {
+  const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null)
+
   return (
     <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6">
       <header>
@@ -11,7 +16,7 @@ export function DashboardPage() {
       </header>
 
       <section className="grid gap-4 lg:grid-cols-2">
-        <AlertsPanel />
+        <AlertsPanel selectedAlert={selectedAlert} onSelectAlert={setSelectedAlert} />
         <HeadlinesPanel />
         <PlaceholderCard
           title="Metrics"

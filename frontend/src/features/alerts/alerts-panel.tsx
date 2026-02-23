@@ -1,4 +1,5 @@
 import { PlaceholderCard } from '../../components/placeholder-card'
+import type { Alert } from '../../lib/types'
 import { useAlerts } from './use-alerts'
 
 function getDirectionBadge(direction: string): { label: string; className: string } {
@@ -33,8 +34,15 @@ function truncateSummary(text: string, maxChars = 140): string {
   return `${normalized.slice(0, maxChars).trimEnd()}…`
 }
 
-export function AlertsPanel() {
+type AlertsPanelProps = {
+  selectedAlert: Alert | null
+  onSelectAlert: (alert: Alert) => void
+}
+
+export function AlertsPanel({ selectedAlert, onSelectAlert }: AlertsPanelProps) {
   const { items, isLoading, isError, error, isLive, lastEventAt } = useAlerts({ limit: 5, interval: 2 })
+  void selectedAlert
+  void onSelectAlert
 
   return (
     <PlaceholderCard

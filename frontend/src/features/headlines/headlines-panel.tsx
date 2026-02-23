@@ -69,7 +69,7 @@ export function HeadlinesPanel() {
                 }
                 className="rounded border border-slate-200 p-2"
               >
-                <p className="font-medium">{headline.title}</p>
+                <p className="truncate font-medium">{headline.title}</p>
                 <p className="text-sm">
                   source: {headline.source ?? 'unknown'} · time:{' '}
                   {formatHeadlineTime(headline.time)}
@@ -83,13 +83,19 @@ export function HeadlinesPanel() {
                   <span className="text-xs text-slate-500">
                     age: {ageSec === null ? 'n/a' : `${ageSec}s`}
                   </span>
-                  <span>
-                    sentiment:{' '}
-                    {typeof headline.sentiment === 'number'
-                      ? headline.sentiment
-                      : 'n/a'}
-                  </span>
                 </p>
+                {headline.url && (
+                  <p className="text-xs">
+                    <a
+                      className="text-sky-400 underline-offset-2 hover:underline"
+                      href={headline.url}
+                      rel="noreferrer noopener"
+                      target="_blank"
+                    >
+                      open source
+                    </a>
+                  </p>
+                )}
               </li>
             )
           })}

@@ -25,6 +25,14 @@ function getFreshnessBadge(headlineFresh?: boolean): { label: string; className:
   return { label: 'unknown', className: 'bg-slate-200 text-slate-700' }
 }
 
+function truncateSummary(text: string, maxChars = 140): string {
+  const normalized = text.trim().replace(/\s+/g, ' ')
+  if (normalized.length <= maxChars) {
+    return normalized
+  }
+  return `${normalized.slice(0, maxChars).trimEnd()}…`
+}
+
 export function AlertsPanel() {
   const { items, isLoading, isError, error, isLive, lastEventAt } = useAlerts({ limit: 5, interval: 2 })
 
@@ -43,6 +51,10 @@ export function AlertsPanel() {
             const freshness = getFreshnessBadge(alert.headline_fresh)
             const ageText =
               typeof alert.headline_age_sec === 'number' ? `${alert.headline_age_sec}s` : 'n/a'
+            const summaryText =
+              typeof alert.summary === 'string' && alert.summary.trim().length > 0
+                ? truncateSummary(alert.summary)
+                : 'No summary yet'
 
             return (
               <li
@@ -62,7 +74,7 @@ export function AlertsPanel() {
                 <p>
                   return: {alert.return} · threshold: {alert.threshold}
                 </p>
-                <p>summary: {alert.summary ?? 'No summary yet.'}</p>
+                <p>summary: {summaryText}</p>
                 <p>time: {alert.time}</p>
               </li>
             )

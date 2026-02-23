@@ -11,7 +11,26 @@ export function AlertsPanel() {
     >
       {isLoading && <p>Loading alerts...</p>}
       {isError && <p>Failed to load alerts: {error?.message}</p>}
-      {!isLoading && !isError && <p>{items.length} alert(s) loaded.</p>}
+      {!isLoading && !isError && items.length === 0 && <p>No alerts yet.</p>}
+      {!isLoading && !isError && items.length > 0 && (
+        <ul className="space-y-2">
+          {items.map((alert) => (
+            <li
+              key={`${alert.time}|${alert.symbol}|${alert.window}|${alert.direction}`}
+              className="rounded border border-slate-200 p-2"
+            >
+              <p>
+                <strong>{alert.symbol}</strong> · {alert.window} · {alert.direction}
+              </p>
+              <p>
+                return: {alert.return} · threshold: {alert.threshold}
+              </p>
+              <p>summary: {alert.summary ?? 'No summary yet.'}</p>
+              <p>time: {alert.time}</p>
+            </li>
+          ))}
+        </ul>
+      )}
       <p>Live: {isLive ? 'connected' : 'waiting for stream'}</p>
       <p>Last event: {lastEventAt ? lastEventAt.toLocaleTimeString() : 'n/a'}</p>
     </PlaceholderCard>

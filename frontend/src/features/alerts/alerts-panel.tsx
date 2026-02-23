@@ -41,6 +41,8 @@ export function AlertsPanel() {
       title="Alerts"
       description="Realtime anomaly alerts from /alerts and /alerts/stream"
     >
+      <p>Live: {isLive ? 'connected' : 'waiting for stream'}</p>
+      <p>Last event: {lastEventAt ? lastEventAt.toLocaleTimeString() : 'n/a'}</p>
       {isLoading && <p>Loading alerts...</p>}
       {isError && <p>Failed to load alerts: {error?.message}</p>}
       {!isLoading && !isError && items.length === 0 && <p>No alerts yet.</p>}
@@ -81,8 +83,6 @@ export function AlertsPanel() {
           })}
         </ul>
       )}
-      <p>Live: {isLive ? 'connected' : 'waiting for stream'}</p>
-      <p>Last event: {lastEventAt ? lastEventAt.toLocaleTimeString() : 'n/a'}</p>
     </PlaceholderCard>
   )
 }

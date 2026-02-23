@@ -83,6 +83,12 @@ export function HeadlinesPanel() {
                   <span className="text-xs text-slate-500">
                     age: {ageSec === null ? 'n/a' : `${ageSec}s`}
                   </span>
+                  <span className="text-xs text-slate-500">
+                    sentiment:{' '}
+                    {typeof headline.sentiment === 'number'
+                      ? headline.sentiment.toFixed(3)
+                      : 'n/a'}
+                  </span>
                 </p>
                 {headline.url && (
                   <p className="text-xs">

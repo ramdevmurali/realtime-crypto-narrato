@@ -134,7 +134,7 @@ class Settings(BaseSettings):
     retention_headlines_days: int | None = None
     retention_anomalies_days: int | None = None
 
-    sentiment_provider: str = "stub"  # stub|onnx
+    sentiment_provider: str = "onnx"  # onnx|stub
     sentiment_model_path: str | None = None
     sentiment_batch_size: int = 16
     sentiment_max_latency_ms: int | None = None

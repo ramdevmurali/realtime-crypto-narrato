@@ -18,13 +18,13 @@
   - Supports multi-feed news polling via `NEWS_RSS_URLS` (fallback to `NEWS_RSS`).
   - DLQ knob: `price_dlq_topic` (default `prices-deadletter`).
 - `io/db.py` — asyncpg pool; creates Timescale hypertables (prices, metrics, headlines, anomalies); insert helpers.
-- `utils.py` — now_utc, simple_sentiment stub, llm_summarize (stub/OpenAI/Gemini), backoff helpers (`sleep_backoff`, `with_retries`).
+- `utils.py` — now_utc, `simple_sentiment` heuristic fallback, llm_summarize (stub/OpenAI/Gemini), backoff helpers (`sleep_backoff`, `with_retries`).
 - `domain/windows.py` — in-memory PriceWindow: add/prune (max window + resample step), strict-window returns/vol, keeps smoothed z-score state. Same-timestamp updates overwrite the last price (no duplicate points).
 - `domain/metrics.py` — computes rolling returns/vol per symbol from PriceWindow; emits raw return z-scores, EWMA-smoothed return z-scores, volatility z-scores + spike flags, and 5th/95th return percentiles per window.
 - `domain/anomaly.py` — **pure** anomaly decision logic (threshold checks, rate-limit, direction). Side effects live in `services/anomaly_service.py`.
 - `services/ingest.py` — tasks:
   - `price_ingest_task`: Binance WS → Kafka `prices` (Timescale writes happen in the consumer/pipeline).
-  - `news_ingest_task`: one or many RSS feeds → dedupe → sentiment stub → Kafka `news` → Timescale `headlines`.
+  - `news_ingest_task`: one or many RSS feeds → dedupe → heuristic sentiment baseline → Kafka `news` → Timescale `headlines`.
     - Freshness SLO visibility: `HEADLINE_STALE_WARN_SEC`, `NEWS_STALE_LOG_EVERY`.
   - Includes backoff/jitter, counters, graceful cancel.
 - `services/price_consumer.py` — Kafka consume loop + commit policy.
@@ -32,7 +32,7 @@
 - `services/runtime.py` — startup config logging.
 - `services/health.py` — DB/Kafka health checks.
 - `services/summary_sidecar.py` — enriches alerts with LLM summaries from `summaries` topic.
-- `services/sentiment_model.py` — sentiment inference wrapper (stub/onnx).
+- `services/sentiment_model.py` — sentiment inference wrapper (ONNX default, stub fallback).
 - `services/sentiment_sidecar.py` — enriches news sentiment and publishes `news-enriched`.
 - `streaming_core.py` — orchestrator + shared state.
 - `app.py` (entrypoint: `PYTHONPATH=processor/src:. .venv/bin/python -m app`) — thin entrypoint for `StreamProcessor`.
@@ -82,8 +82,9 @@ Event ID formats (stable, for tracing/dedupe):
 - `news-enriched`: `event_id = "news:{source}:{sha256(time|source|title|url)[:12]}"` (title lowercased/trimmed; url may be empty).
 Note: event_id is deterministic and collision‑resistant; intended for dedupe/trace.
 
-Sentiment fallback behavior: if the sentiment sidecar is down or errors, the raw `news` topic remains valid
-and carries the stub sentiment; consumers can continue using `news` until `news-enriched` is available.
+Sentiment fallback behavior: ONNX is the default sidecar provider. If the sidecar is down,
+the model cannot be loaded, or inference errors occur, the raw `news` topic remains valid
+with the baseline heuristic sentiment; consumers can continue using `news` until `news-enriched` is available.
 
 ## Anomaly observability
 Processor telemetry includes explicit anomaly-path decisions (namespaced under `processor.`):
@@ -124,6 +125,7 @@ Sentiment sidecar (local):
 ```
 PYTHONPATH=processor/src:. .venv/bin/python -m services.sentiment_sidecar
 ```
+Default provider is `SENTIMENT_PROVIDER=onnx`. Startup/inference falls back to heuristic sentiment unless `SENTIMENT_FAIL_FAST=true`.
 
 Sentiment model assets (local ONNX):
 - Place model files under `models/finbert/`:

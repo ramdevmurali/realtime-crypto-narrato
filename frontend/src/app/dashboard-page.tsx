@@ -1,8 +1,9 @@
 import { useState } from 'react'
 
-import { PlaceholderCard } from '../components/placeholder-card'
 import { AlertsPanel } from '../features/alerts/alerts-panel'
 import { HeadlinesPanel } from '../features/headlines/headlines-panel'
+import { MetricsPanel } from '../features/metrics/metrics-panel'
+import { PricesPanel } from '../features/prices/prices-panel'
 import type { Alert } from '../lib/types'
 
 function getAlertKey(alert: Alert): string {
@@ -27,15 +28,8 @@ export function DashboardPage() {
           onClearSelectedAlert={() => setSelectedAlert(null)}
         />
         <HeadlinesPanel />
-        <PlaceholderCard
-          title="Metrics"
-          description="Latest computed metrics from /metrics/latest"
-        >
-          Metrics cards and trend widgets will be added next.
-        </PlaceholderCard>
-        <PlaceholderCard title="Prices" description="Recent prices from /prices">
-          Price timeline and range controls will be added next.
-        </PlaceholderCard>
+        <MetricsPanel />
+        <PricesPanel />
       </section>
     </main>
   )

@@ -2,7 +2,14 @@ import { PlaceholderCard } from '../../components/placeholder-card'
 import type { LatestMetrics } from '../../lib/types'
 import { useMetrics } from './use-metrics'
 
-const PREFERRED_FIELDS = ['return_1m', 'return_5m', 'vol_1m', 'attention', 'return_z_ewma_1m', 'vol_z_1m']
+const PREFERRED_FIELDS = [
+  'return_1m',
+  'return_z_ewma_1m',
+  'vol_1m',
+  'vol_z_1m',
+  'attention',
+  'return_5m',
+]
 const RESERVED_FIELDS = new Set(['time', 'symbol'])
 
 function formatMetricTime(value: unknown): string {

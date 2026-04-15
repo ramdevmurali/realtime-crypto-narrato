@@ -60,6 +60,7 @@ export function DashboardPage() {
             priceSeriesBySymbol={dashboard.priceSeriesBySymbol}
             alertOverlay={dashboard.alertOverlay}
             selectedSymbols={dashboard.selectedSymbols}
+            window={window}
           />
         </article>
 

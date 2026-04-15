@@ -11,7 +11,7 @@ import {
 } from 'recharts'
 
 import type { AlertOverlayPoint, PriceSeriesPoint, SymbolKey, TimeWindow } from './types'
-import { formatClock, formatPrice, symbolLabel } from './ui-utils'
+import { formatClock, formatPrice, symbolLabel, symbolStroke } from './ui-utils'
 
 type MarketOverviewChartProps = {
   priceSeriesBySymbol: Record<SymbolKey, PriceSeriesPoint[]>
@@ -333,7 +333,7 @@ export function MarketOverviewChart({
               isAnimationActive
               animationDuration={220}
               name="btcusdt"
-              stroke="#0f172a"
+              stroke={symbolStroke('btcusdt')}
               strokeWidth={1.8}
             />
           )}
@@ -346,7 +346,7 @@ export function MarketOverviewChart({
               isAnimationActive
               animationDuration={220}
               name="ethusdt"
-              stroke="#334155"
+              stroke={symbolStroke('ethusdt')}
               strokeWidth={1.8}
             />
           )}

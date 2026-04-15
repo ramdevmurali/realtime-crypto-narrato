@@ -1,5 +1,10 @@
 import type { DashboardHealthState, SymbolKey } from './types'
 
+const SYMBOL_STROKE_BY_KEY: Record<SymbolKey, string> = {
+  btcusdt: '#d97706',
+  ethusdt: '#2563eb',
+}
+
 export function formatClock(ts: number): string {
   return new Date(ts).toLocaleTimeString([], { hour12: false })
 }
@@ -17,6 +22,10 @@ export function symbolLabel(symbol: SymbolKey): string {
     return 'BTC'
   }
   return 'ETH'
+}
+
+export function symbolStroke(symbol: SymbolKey): string {
+  return SYMBOL_STROKE_BY_KEY[symbol]
 }
 
 export function formatPrice(value: number | null): string {

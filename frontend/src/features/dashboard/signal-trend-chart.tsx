@@ -10,7 +10,7 @@ import {
 } from 'recharts'
 
 import type { MetricSeriesPoint, SymbolKey } from './types'
-import { formatClock, symbolLabel } from './ui-utils'
+import { formatClock, symbolLabel, symbolStroke } from './ui-utils'
 
 type SignalTrendChartProps = {
   metricSeriesBySymbol: Record<SymbolKey, MetricSeriesPoint[]>
@@ -178,7 +178,7 @@ function TrendMiniChart({
                 name={symbolLabel('btcusdt')}
                 dot={false}
                 connectNulls
-                stroke="#0f172a"
+                stroke={symbolStroke('btcusdt')}
                 strokeWidth={1.6}
                 isAnimationActive
                 animationDuration={220}
@@ -191,7 +191,7 @@ function TrendMiniChart({
                 name={symbolLabel('ethusdt')}
                 dot={false}
                 connectNulls
-                stroke="#475569"
+                stroke={symbolStroke('ethusdt')}
                 strokeWidth={1.6}
                 isAnimationActive
                 animationDuration={220}

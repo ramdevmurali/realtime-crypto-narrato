@@ -25,29 +25,79 @@ type Frame = {
   ethusdt: number | null
 }
 
+const SYMBOLS: SymbolKey[] = ['btcusdt', 'ethusdt']
+const METRIC_BUCKET_MS = 1000
+
+const Y_DOMAIN_BY_FIELD: Record<SeriesField, [number, number]> = {
+  return_z_ewma_1m: [-3.5, 3.5],
+  vol_z_1m: [-3, 4],
+}
+
+function resolveYDomain(field: SeriesField): [number, number] {
+  return Y_DOMAIN_BY_FIELD[field]
+}
+
+function toBucketTs(ts: number, bucketMs: number): number {
+  return Math.floor(ts / bucketMs) * bucketMs
+}
+
 function buildFrames(
   dataBySymbol: Record<SymbolKey, MetricSeriesPoint[]>,
-  field: SeriesField
+  field: SeriesField,
+  selectedSymbols: SymbolKey[]
 ): Frame[] {
-  const map = new Map<number, Frame>()
-
-  for (const symbol of ['btcusdt', 'ethusdt'] as const) {
-    for (const point of dataBySymbol[symbol]) {
-      const value = point[field]
-      const existing = map.get(point.ts)
-      if (existing) {
-        existing[symbol] = value
-      } else {
-        map.set(point.ts, {
-          ts: point.ts,
-          btcusdt: symbol === 'btcusdt' ? value : null,
-          ethusdt: symbol === 'ethusdt' ? value : null,
-        })
-      }
-    }
+  const selectedSet = new Set(selectedSymbols)
+  const sortedBySymbol: Record<SymbolKey, MetricSeriesPoint[]> = {
+    btcusdt: [...dataBySymbol.btcusdt].sort((a, b) => a.ts - b.ts),
+    ethusdt: [...dataBySymbol.ethusdt].sort((a, b) => a.ts - b.ts),
   }
 
-  return Array.from(map.values()).sort((a, b) => a.ts - b.ts)
+  let minTs = Number.POSITIVE_INFINITY
+  let maxTs = Number.NEGATIVE_INFINITY
+
+  for (const symbol of SYMBOLS) {
+    if (!selectedSet.has(symbol)) {
+      continue
+    }
+    const series = sortedBySymbol[symbol]
+    if (series.length === 0) {
+      continue
+    }
+    minTs = Math.min(minTs, series[0].ts)
+    maxTs = Math.max(maxTs, series[series.length - 1].ts)
+  }
+
+  if (!Number.isFinite(minTs) || !Number.isFinite(maxTs)) {
+    return []
+  }
+
+  const start = toBucketTs(minTs, METRIC_BUCKET_MS)
+  const end = toBucketTs(maxTs, METRIC_BUCKET_MS)
+  const pointers: Record<SymbolKey, number> = { btcusdt: 0, ethusdt: 0 }
+  const carried: Record<SymbolKey, number | null> = { btcusdt: null, ethusdt: null }
+  const frames: Frame[] = []
+
+  for (let bucketTs = start; bucketTs <= end; bucketTs += METRIC_BUCKET_MS) {
+    for (const symbol of SYMBOLS) {
+      const series = sortedBySymbol[symbol]
+      while (pointers[symbol] < series.length) {
+        const point = series[pointers[symbol]]
+        if (toBucketTs(point.ts, METRIC_BUCKET_MS) > bucketTs) {
+          break
+        }
+        carried[symbol] = point[field]
+        pointers[symbol] += 1
+      }
+    }
+
+    frames.push({
+      ts: bucketTs,
+      btcusdt: carried.btcusdt,
+      ethusdt: carried.ethusdt,
+    })
+  }
+
+  return frames
 }
 
 function TrendTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name?: string; value?: number | null }>; label?: number }) {
@@ -80,7 +130,8 @@ function TrendMiniChart({
   dataBySymbol: Record<SymbolKey, MetricSeriesPoint[]>
   selectedSymbols: SymbolKey[]
 }) {
-  const data = buildFrames(dataBySymbol, field)
+  const data = buildFrames(dataBySymbol, field, selectedSymbols)
+  const yDomain = resolveYDomain(field)
 
   if (data.length === 0) {
     return (
@@ -111,6 +162,8 @@ function TrendMiniChart({
             <YAxis
               tickLine={false}
               axisLine={false}
+              domain={yDomain}
+              allowDataOverflow
               width={44}
               stroke="#94a3b8"
               tickFormatter={(value) => Number(value).toFixed(1)}
@@ -124,6 +177,7 @@ function TrendMiniChart({
                 dataKey="btcusdt"
                 name={symbolLabel('btcusdt')}
                 dot={false}
+                connectNulls
                 stroke="#0f172a"
                 strokeWidth={1.6}
                 isAnimationActive
@@ -136,6 +190,7 @@ function TrendMiniChart({
                 dataKey="ethusdt"
                 name={symbolLabel('ethusdt')}
                 dot={false}
+                connectNulls
                 stroke="#475569"
                 strokeWidth={1.6}
                 isAnimationActive

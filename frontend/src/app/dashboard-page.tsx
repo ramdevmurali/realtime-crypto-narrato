@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react'
 
 import { AlertsRail } from '../features/dashboard/alerts-rail'
 import { DashboardControls } from '../features/dashboard/dashboard-controls'
-import { HeadlineFreshnessChart } from '../features/dashboard/headline-freshness-chart'
 import { HeadlinesRail } from '../features/dashboard/headlines-rail'
 import { KPIStack } from '../features/dashboard/kpi-stack'
 import { LiveStatusRail } from '../features/dashboard/live-status-rail'
@@ -85,10 +84,6 @@ export function DashboardPage() {
             metricSeriesBySymbol={dashboard.metricSeriesBySymbol}
             selectedSymbols={dashboard.selectedSymbols}
           />
-          <div className="mt-3 rounded-xl border border-slate-200 p-3">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Headline Freshness</p>
-            <HeadlineFreshnessChart points={dashboard.headlineFreshness} />
-          </div>
         </article>
 
         <div className="lg:col-span-4">

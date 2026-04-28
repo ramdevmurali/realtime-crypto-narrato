@@ -217,8 +217,7 @@ services:
       backend:
         condition: service_healthy
     environment:
-      NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE}
-      NEXT_PUBLIC_WS_BASE: ${NEXT_PUBLIC_WS_BASE}
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
     ports:
       - "3000:3000"
     networks:

@@ -79,6 +79,7 @@ services:
       PROCESSOR_CONSUMER_GROUP: ${PROCESSOR_CONSUMER_GROUP:-processor}
       REDIS_URL: ${REDIS_URL}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      CORS_ALLOWED_ORIGINS_RAW: ${CORS_ALLOWED_ORIGINS_RAW:-http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173}
       PRICE_TOPIC: prices
       NEWS_TOPIC: news
       ALERTS_TOPIC: alerts

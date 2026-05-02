@@ -1,6 +1,7 @@
 import asyncio
 import json
 import base64
+from datetime import datetime, timezone
 import pytest
 
 from processor.src.services import summary_sidecar  # type: ignore
@@ -38,11 +39,17 @@ class _FakeWriter:
 
 
 class FakePool:
-    def __init__(self):
+    def __init__(self, headline_row=None):
         self.calls = []
+        self.fetch_calls = []
+        self.headline_row = headline_row
 
     async def execute(self, sql, *params):
         self.calls.append((sql.strip(), params))
+
+    async def fetchrow(self, sql, *params):
+        self.fetch_calls.append((sql.strip(), params))
+        return self.headline_row
 
 
 class FakeProducer:
@@ -224,6 +231,74 @@ async def test_persist_and_publish_summary(monkeypatch):
     assert out["summary"] == "LLM SUMMARY"
     assert out["symbol"] == "btcusdt"
     assert out["event_id"] == "2026-01-27T12:00:00+00:00:btcusdt:1m"
+
+
+@pytest.mark.asyncio
+async def test_summary_hydrates_missing_context_from_latest_headline(monkeypatch):
+    payload = {
+        "time": "2026-01-27T12:00:00+00:00",
+        "symbol": "btcusdt",
+        "window": "1m",
+        "direction": "up",
+        "ret": 0.07,
+        "threshold": 0.05,
+        "headline": None,
+        "sentiment": None,
+    }
+    pool = FakePool(
+        headline_row={
+            "time": datetime(2026, 1, 27, 11, 59, tzinfo=timezone.utc),
+            "title": "ETF inflow accelerates as risk appetite returns",
+            "sentiment": 0.42,
+        }
+    )
+
+    ok, _, producer, pool = await _run_summary_record(payload, monkeypatch, pool=pool)
+    assert ok is True
+    assert len(pool.fetch_calls) == 1
+
+    _, params = pool.calls[0]
+    assert params[6] == "ETF inflow accelerates as risk appetite returns"
+    assert params[7] == 0.42
+
+    _, out_payload = producer.sent[0]
+    out = json.loads(out_payload.decode())
+    assert out["headline"] == "ETF inflow accelerates as risk appetite returns"
+    assert out["sentiment"] == 0.42
+
+
+@pytest.mark.asyncio
+async def test_summary_keeps_existing_payload_context(monkeypatch):
+    payload = {
+        "time": "2026-01-27T12:00:00+00:00",
+        "symbol": "btcusdt",
+        "window": "1m",
+        "direction": "up",
+        "ret": 0.07,
+        "threshold": 0.05,
+        "headline": "payload headline",
+        "sentiment": 0.1,
+    }
+    pool = FakePool(
+        headline_row={
+            "time": datetime(2026, 1, 27, 11, 59, tzinfo=timezone.utc),
+            "title": "newer headline should not replace payload context",
+            "sentiment": 0.9,
+        }
+    )
+
+    ok, _, producer, pool = await _run_summary_record(payload, monkeypatch, pool=pool)
+    assert ok is True
+    assert len(pool.fetch_calls) == 0
+
+    _, params = pool.calls[0]
+    assert params[6] == "payload headline"
+    assert params[7] == 0.1
+
+    _, out_payload = producer.sent[0]
+    out = json.loads(out_payload.decode())
+    assert out["headline"] == "payload headline"
+    assert out["sentiment"] == 0.1
 
 
 @pytest.mark.asyncio

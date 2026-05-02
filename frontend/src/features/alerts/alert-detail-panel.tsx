@@ -20,7 +20,7 @@ export function AlertDetailPanel({ alert }: AlertDetailPanelProps) {
   const summaryText =
     typeof alert.summary === 'string' && alert.summary.trim().length > 0
       ? alert.summary
-      : 'No summary yet'
+      : 'Summarizing...'
   const headlineText =
     typeof alert.headline === 'string' && alert.headline.trim().length > 0
       ? alert.headline

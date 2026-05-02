@@ -99,6 +99,8 @@ class Settings(BaseSettings):
     llm_max_tokens: int = 80
     llm_temperature: float = 0.3
     llm_fallback_log_every: int = 100
+    # Deprecated compatibility knob: summaries are sidecar-authoritative and
+    # processor hot-path no longer generates summary text.
     anomaly_hotpath_stub_summary: bool = True
     openai_api_key: str | None = None
     google_api_key: str | None = None

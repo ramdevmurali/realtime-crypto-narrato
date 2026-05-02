@@ -54,9 +54,10 @@ Terminology note: the `metrics` table stores **price metrics** (returns/vol/z/pe
 - Threshold check & cooldown happen in `domain/anomaly.py`; if tripped, the alert is persisted to Timescale (in `anomalies`) and published to the Kafka `alerts` topic. These represent the same event across DB and Kafka.
 - Normal mode uses static thresholds (`ALERT_THRESHOLD_1M/5M/15M`) and `ANOMALY_COOLDOWN_SEC`.
 - Test mode is explicit and off by default: when `ANOMALY_TEST_MODE=true`, thresholds are overridden by `ANOMALY_TEST_THRESHOLD` and cooldown by `ANOMALY_TEST_COOLDOWN_SEC`.
-- The processor no longer calls the LLM in the hot path. It publishes a **summary request** message to the `summaries` topic with `{time, symbol, window, direction, ret, threshold, headline, sentiment}`. Alerts still carry the base/stub summary.
+- The processor does not call the LLM in the hot path. It publishes a **summary request** message to the `summaries` topic with `{time, symbol, window, direction, ret, threshold, headline, sentiment}` and emits alerts with a pending summary (`null`).
   - Note: the Kafka `summaries` topic contains **requests**, not completed summaries.
-- The summary sidecar consumes `summaries`, calls the configured LLM, and backfills richer summaries asynchronously.
+- The summary sidecar consumes `summaries`, calls the configured LLM, and backfills richer summaries asynchronously in `anomalies.summary`.
+  - UI clients should treat empty/null summary as `summarizing...` until the enriched value appears.
   - Sidecar knobs: `SUMMARY_CONSUMER_GROUP`, `SUMMARY_POLL_TIMEOUT_MS`, `SUMMARY_BATCH_MAX` (optional) control consumption behavior.
 
 ## Topic payloads (required fields)

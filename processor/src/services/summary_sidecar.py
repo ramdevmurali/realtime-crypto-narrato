@@ -2,6 +2,7 @@ import asyncio
 import json
 import base64
 import time
+from datetime import timedelta
 from pathlib import Path
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 from aiokafka.structs import TopicPartition, OffsetAndMetadata
@@ -165,6 +166,46 @@ async def compute_summary(payload, llm_provider: str, api_key: str | None, semap
         )
 
 
+async def hydrate_payload_with_latest_headline(payload: dict, pool, log) -> dict:
+    """
+    For sparse anomaly payloads, enrich missing headline/sentiment from the
+    most recent fresh headline in DB so the summary has usable context.
+    """
+    if payload.get("headline") and payload.get("sentiment") is not None:
+        return payload
+
+    cutoff = now_utc() - timedelta(seconds=settings.headline_max_age_sec)
+    row = await pool.fetchrow(
+        """
+        SELECT time, title, sentiment
+        FROM headlines
+        WHERE time >= $1
+        ORDER BY time DESC
+        LIMIT 1
+        """,
+        cutoff,
+    )
+    if not row:
+        return payload
+
+    enriched = dict(payload)
+    if not enriched.get("headline"):
+        enriched["headline"] = row["title"]
+    row_sentiment = row["sentiment"]
+    if enriched.get("sentiment") is None and row_sentiment is not None:
+        enriched["sentiment"] = row_sentiment
+
+    log.info(
+        "summary_context_hydrated",
+        extra={
+            "symbol": enriched.get("symbol"),
+            "window": enriched.get("window"),
+            "headline_time": row["time"].isoformat() if hasattr(row["time"], "isoformat") else str(row["time"]),
+        },
+    )
+    return enriched
+
+
 async def persist_summary(payload, summary: str, pool, log, ts):
     log.info("summary_request_received", extra=payload)
 
@@ -174,7 +215,10 @@ async def persist_summary(payload, summary: str, pool, log, ts):
         INSERT INTO anomalies (time, symbol, window_name, direction, return_value, threshold, headline, sentiment, summary)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
         ON CONFLICT (time, symbol, window_name) DO UPDATE
-        SET summary = EXCLUDED.summary
+        SET
+            summary = EXCLUDED.summary,
+            headline = COALESCE(anomalies.headline, EXCLUDED.headline),
+            sentiment = COALESCE(anomalies.sentiment, EXCLUDED.sentiment)
         """,
         ts,
         payload["symbol"],
@@ -227,6 +271,7 @@ async def process_summary_record(msg, consumer, producer, pool, log, semaphore: 
     started = time.perf_counter()
     try:
         payload = SummaryRequestMsg.model_validate_json(msg.value).model_dump()
+        payload = await hydrate_payload_with_latest_headline(payload, pool, log)
         api_key = None
         ts = parse_iso_datetime(payload["time"])
         if settings.llm_provider == "openai":

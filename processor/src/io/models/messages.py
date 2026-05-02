@@ -96,7 +96,7 @@ class AlertMsg(BaseModel):
     threshold: float
     headline: Optional[str] = None
     sentiment: Optional[float] = None
-    summary: str
+    summary: Optional[str] = None
 
     def to_bytes(self) -> bytes:
         return self.model_dump_json().encode()

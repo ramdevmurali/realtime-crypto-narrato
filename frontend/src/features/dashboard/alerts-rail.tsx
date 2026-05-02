@@ -16,7 +16,7 @@ function alertKey(alert: Alert): string {
 
 function trimSummary(value: string | null): string {
   if (!value) {
-    return 'no summary'
+    return 'summarizing...'
   }
   const text = value.trim().replace(/\s+/g, ' ')
   if (text.length <= 96) {

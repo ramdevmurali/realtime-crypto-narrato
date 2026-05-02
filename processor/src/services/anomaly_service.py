@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-import asyncio
 
 from ..config import settings, get_thresholds
-from ..domain.anomaly import AnomalyEvent, HeadlineContext, detect_anomalies
+from ..domain.anomaly import HeadlineContext, detect_anomalies
 from ..io.db import insert_anomaly, fetch_anomaly_alert_published, mark_anomaly_alert_published
-from ..llm import llm_summarize
 from ..retry import with_retries
 from ..logging_config import get_logger
 from ..metrics import get_metrics
@@ -93,25 +91,10 @@ async def check_anomalies(
         telemetry.inc("anomaly_emitted")
         if event.headline is None:
             telemetry.inc("anomaly_emitted_without_headline")
-        if settings.anomaly_hotpath_stub_summary:
-            summary = llm_summarize("stub", None, event.symbol, event.window, event.ret, event.headline, event.sentiment)
-        else:
-            api_key = None
-            if settings.llm_provider == "openai":
-                api_key = settings.openai_api_key
-            elif settings.llm_provider == "google":
-                api_key = settings.google_api_key
-            summary = await asyncio.to_thread(
-                llm_summarize,
-                settings.llm_provider,
-                api_key,
-                event.symbol,
-                event.window,
-                event.ret,
-                event.headline,
-                event.sentiment,
-            )
-        event.summary_stub = summary
+        # Summary generation is sidecar-authoritative.
+        # Keep hot-path anomaly emission non-blocking and publish with a pending summary.
+        summary = None
+        event.summary_stub = None
 
         event_id = f"{event.time.isoformat()}:{event.symbol}:{event.window}"
         inserted = await with_retries(

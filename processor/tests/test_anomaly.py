@@ -57,8 +57,11 @@ async def test_check_anomalies_triggers_and_updates_state(monkeypatch):
     assert b"btcusdt" in payload0
     topic1, payload1 = proc.producer.sent[1]
     assert topic1 == settings.alerts_topic
-    assert b"btcusdt" in payload1
+    alert = json.loads(payload1.decode())
+    assert alert["symbol"] == "btcusdt"
+    assert alert["summary"] is None
     assert len(calls) == 1  # insert_anomaly called
+    assert calls[0][8] is None
 
 
 @pytest.mark.asyncio
@@ -272,19 +275,19 @@ async def test_check_anomalies_retries_publish_when_unpublished(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_check_anomalies_llm_offloaded(monkeypatch):
+async def test_check_anomalies_hot_path_never_calls_llm(monkeypatch):
     async def fake_insert_anomaly(*args, **kwargs):
         return True
 
     async def fake_mark(*args, **kwargs):
         return None
 
-    def fake_llm(provider, api_key, symbol, window, ret, headline, sentiment):
-        return "llm summary"
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("hot path must not call llm_summarize")
 
     monkeypatch.setattr(anomaly_service, "insert_anomaly", fake_insert_anomaly)
     monkeypatch.setattr(anomaly_service, "mark_anomaly_alert_published", fake_mark)
-    monkeypatch.setattr(anomaly_service, "llm_summarize", fake_llm)
+    monkeypatch.setattr(anomaly_service, "llm_summarize", fail_if_called, raising=False)
     monkeypatch.setattr(settings, "anomaly_hotpath_stub_summary", False)
     monkeypatch.setattr(settings, "llm_provider", "openai")
     monkeypatch.setattr(settings, "openai_api_key", "test-key")
@@ -296,6 +299,8 @@ async def test_check_anomalies_llm_offloaded(monkeypatch):
     await anomaly_service.check_anomalies(proc, "btcusdt", ts, metrics, publisher=proc.producer)
 
     assert len(proc.producer.sent) == 2
+    alert = json.loads(proc.producer.sent[1][1].decode())
+    assert alert["summary"] is None
 
 
 @pytest.mark.asyncio

@@ -105,6 +105,22 @@ def test_alert_msg_valid():
     assert msg.summary == "summary"
 
 
+def test_alert_msg_allows_pending_summary():
+    msg = AlertMsg(
+        event_id="2026-02-01T00:00:00+00:00:btcusdt:1m",
+        time="2026-02-01T00:00:00+00:00",
+        symbol="btcusdt",
+        window="1m",
+        direction="up",
+        ret=0.05,
+        threshold=0.04,
+        headline="headline",
+        sentiment=0.2,
+        summary=None,
+    )
+    assert msg.summary is None
+
+
 def test_price_msg_missing_field_fails():
     with pytest.raises(Exception):
         PriceMsg(symbol="btcusdt", time=datetime(2026, 2, 1, 0, 0, tzinfo=timezone.utc))

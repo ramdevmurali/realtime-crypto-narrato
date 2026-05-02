@@ -83,7 +83,7 @@ export function AlertsPanel({
             const summaryText =
               typeof alert.summary === 'string' && alert.summary.trim().length > 0
                 ? truncateSummary(alert.summary)
-                : 'No summary yet'
+                : 'Summarizing...'
 
             return (
               <li
